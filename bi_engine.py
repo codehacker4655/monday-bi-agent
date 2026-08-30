@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 
 
@@ -20,6 +21,7 @@ class BIEngine:
         column: str
     ) -> pd.DataFrame:
         """Filter a DataFrame by sector without changing the original data."""
+
         if not sector or column not in df.columns:
             return df.copy()
 
@@ -35,22 +37,102 @@ class BIEngine:
         ].copy()
 
     @staticmethod
-    def _safe_percentage(numerator: float, denominator: float):
+    def _safe_percentage(
+        numerator: float,
+        denominator: float
+    ):
         """
         Calculate a percentage safely.
 
-        Returns None when the denominator is zero or unavailable,
-        rather than incorrectly returning 0%.
+        Returns None when the denominator is zero,
+        missing, NaN or infinite.
         """
-        if denominator is None or denominator <= 0:
+
+        if numerator is None or denominator is None:
+            return None
+
+        try:
+            numerator = float(numerator)
+            denominator = float(denominator)
+        except (TypeError, ValueError):
+            return None
+
+        if (
+            not math.isfinite(numerator)
+            or not math.isfinite(denominator)
+            or denominator <= 0
+        ):
             return None
 
         return round((numerator / denominator) * 100, 2)
 
-    def get_pipeline_health(self, sector: str = None) -> dict:
+    @staticmethod
+    def _safe_distribution(
+        series: pd.Series
+    ) -> dict:
         """
-        Calculate sales pipeline metrics with explicit data-quality caveats.
+        Convert a pandas Series into a JSON-safe distribution.
+
+        Missing values are represented as 'Unknown'.
+        Counts are converted to normal Python integers.
         """
+
+        if series is None:
+            return {}
+
+        cleaned = series.copy()
+
+        cleaned = cleaned.astype(object).where(
+            cleaned.notna(),
+            "Unknown"
+        )
+
+        cleaned = cleaned.astype(str).str.strip()
+
+        cleaned = cleaned.replace(
+            {
+                "": "Unknown",
+                "nan": "Unknown",
+                "NaN": "Unknown",
+                "None": "Unknown",
+            }
+        )
+
+        counts = cleaned.value_counts(dropna=False)
+
+        return {
+            str(key): int(value)
+            for key, value in counts.items()
+        }
+
+    @staticmethod
+    def _safe_number(value) -> float:
+        """
+        Convert a value into a JSON-safe float.
+
+        NaN and infinity become 0.0.
+        """
+
+        try:
+            value = float(value)
+
+            if not math.isfinite(value):
+                return 0.0
+
+            return value
+
+        except (TypeError, ValueError):
+            return 0.0
+
+    def get_pipeline_health(
+        self,
+        sector: str = None
+    ) -> dict:
+        """
+        Calculate sales pipeline metrics with explicit
+        data-quality caveats.
+        """
+
         df = self._filter_by_sector(
             self.deals_df,
             sector,
@@ -58,42 +140,72 @@ class BIEngine:
         )
 
         total_deals = len(df)
+
         val_col = "Masked Deal value"
 
-        # Recorded deal values only.
+        # --------------------------------------------------
+        # Deal values
+        # --------------------------------------------------
+
         if val_col in df.columns:
-            known_values = df[val_col].dropna()
-            total_recorded_deal_value = float(known_values.sum())
-            missing_value_count = int(df[val_col].isna().sum())
+
+            numeric_values = pd.to_numeric(
+                df[val_col],
+                errors="coerce"
+            )
+
+            known_values = numeric_values.dropna()
+
+            total_recorded_deal_value = self._safe_number(
+                known_values.sum()
+            )
+
+            missing_value_count = int(
+                numeric_values.isna().sum()
+            )
+
         else:
+
             total_recorded_deal_value = 0.0
             missing_value_count = total_deals
 
-        # Stage distribution.
+        # --------------------------------------------------
+        # Stage distribution
+        # --------------------------------------------------
+
         if "Deal Stage" in df.columns:
-            stage_distribution = (
+
+            stage_distribution = self._safe_distribution(
                 df["Deal Stage"]
-                .value_counts(dropna=False)
-                .to_dict()
             )
+
         else:
+
             stage_distribution = {}
 
-        # Status distribution.
+        # --------------------------------------------------
+        # Status distribution
+        # --------------------------------------------------
+
         if "Deal Status" in df.columns:
-            status_distribution = (
+
+            status_distribution = self._safe_distribution(
                 df["Deal Status"]
-                .value_counts(dropna=False)
-                .to_dict()
             )
+
         else:
+
             status_distribution = {}
 
-        # Useful high-level status counts.
+        # --------------------------------------------------
+        # Won / Lost counts
+        # --------------------------------------------------
+
         won_deals = 0
         lost_deals = 0
 
         if "Deal Status" in df.columns:
+
             status = (
                 df["Deal Status"]
                 .fillna("")
@@ -102,33 +214,51 @@ class BIEngine:
                 .str.casefold()
             )
 
-            won_deals = int((status == "won").sum())
-            lost_deals = int((status == "lost").sum())
+            won_deals = int(
+                (status == "won").sum()
+            )
+
+            lost_deals = int(
+                (status == "lost").sum()
+            )
+
+        # --------------------------------------------------
+        # Data quality caveats
+        # --------------------------------------------------
 
         caveats = []
 
         if missing_value_count > 0:
+
             caveats.append(
                 f"{missing_value_count} out of {total_deals} "
                 "deals have missing deal values."
             )
 
         if "Deal Stage" not in df.columns:
+
             caveats.append(
                 "Deal Stage is unavailable in the source data."
             )
 
         if "Deal Status" not in df.columns:
+
             caveats.append(
                 "Deal Status is unavailable in the source data."
             )
 
+        # --------------------------------------------------
+        # Final pipeline result
+        # --------------------------------------------------
+
         return {
             "sector": sector or "All Sectors",
-            "total_deals": total_deals,
-            "total_recorded_deal_value_inr": total_recorded_deal_value,
-            "won_deals": won_deals,
-            "lost_deals": lost_deals,
+            "total_deals": int(total_deals),
+            "total_recorded_deal_value_inr": (
+                total_recorded_deal_value
+            ),
+            "won_deals": int(won_deals),
+            "lost_deals": int(lost_deals),
             "status_distribution": status_distribution,
             "stage_distribution": stage_distribution,
             "data_caveats": caveats,
@@ -139,9 +269,10 @@ class BIEngine:
         sector: str = None
     ) -> dict:
         """
-        Calculate contracted, billed, collected and outstanding values
-        from Work Orders.
+        Calculate contracted, billed, collected and
+        outstanding values from Work Orders.
         """
+
         df = self._filter_by_sector(
             self.wo_df,
             sector,
@@ -153,25 +284,60 @@ class BIEngine:
         contract_col = (
             "Amount in Rupees (Incl of GST) (Masked)"
         )
+
         billed_col = (
             "Billed Value in Rupees (Incl of GST.) (Masked)"
         )
+
         collected_col = (
             "Collected Amount in Rupees (Incl of GST.) (Masked)"
         )
 
+        # --------------------------------------------------
+        # Safe numeric sum
+        # --------------------------------------------------
+
         def safe_sum(column: str) -> float:
+
             if column not in df.columns:
                 return 0.0
 
-            return float(df[column].sum(skipna=True))
+            numeric_values = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
 
-        total_contracted = safe_sum(contract_col)
-        total_billed = safe_sum(billed_col)
-        total_collected = safe_sum(collected_col)
+            total = numeric_values.sum(
+                skipna=True
+            )
 
-        # Outstanding amount based on recorded billed and collected values.
-        outstanding = total_billed - total_collected
+            return self._safe_number(total)
+
+        # --------------------------------------------------
+        # Financial totals
+        # --------------------------------------------------
+
+        total_contracted = safe_sum(
+            contract_col
+        )
+
+        total_billed = safe_sum(
+            billed_col
+        )
+
+        total_collected = safe_sum(
+            collected_col
+        )
+
+        # Outstanding amount based on
+        # recorded billed and collected values.
+        outstanding = self._safe_number(
+            total_billed - total_collected
+        )
+
+        # --------------------------------------------------
+        # Percentages
+        # --------------------------------------------------
 
         billing_percentage = self._safe_percentage(
             total_billed,
@@ -183,77 +349,116 @@ class BIEngine:
             total_billed
         )
 
-        # Missing-value counts.
+        # --------------------------------------------------
+        # Missing-value counts
+        # --------------------------------------------------
+
         missing_contract = (
-            int(df[contract_col].isna().sum())
+            int(
+                pd.to_numeric(
+                    df[contract_col],
+                    errors="coerce"
+                ).isna().sum()
+            )
             if contract_col in df.columns
             else total_orders
         )
 
         missing_billed = (
-            int(df[billed_col].isna().sum())
+            int(
+                pd.to_numeric(
+                    df[billed_col],
+                    errors="coerce"
+                ).isna().sum()
+            )
             if billed_col in df.columns
             else total_orders
         )
 
         missing_collected = (
-            int(df[collected_col].isna().sum())
+            int(
+                pd.to_numeric(
+                    df[collected_col],
+                    errors="coerce"
+                ).isna().sum()
+            )
             if collected_col in df.columns
             else total_orders
         )
 
-        # Execution status distribution.
+        # --------------------------------------------------
+        # Execution status distribution
+        # --------------------------------------------------
+
         if "Execution Status" in df.columns:
-            execution_statuses = (
+
+            execution_statuses = self._safe_distribution(
                 df["Execution Status"]
-                .value_counts(dropna=False)
-                .to_dict()
             )
+
         else:
+
             execution_statuses = {}
+
+        # --------------------------------------------------
+        # Data quality caveats
+        # --------------------------------------------------
 
         caveats = []
 
         if missing_contract > 0:
+
             caveats.append(
                 f"{missing_contract} work orders have missing "
                 "contracted amounts."
             )
 
         if missing_billed > 0:
+
             caveats.append(
                 f"{missing_billed} work orders have missing "
                 "billed amounts."
             )
 
         if missing_collected > 0:
+
             caveats.append(
                 f"{missing_collected} work orders have missing "
                 "collected amounts."
             )
 
         if contract_col not in df.columns:
+
             caveats.append(
-                "Contracted amount is unavailable in the source data."
+                "Contracted amount is unavailable "
+                "in the source data."
             )
 
         if billed_col not in df.columns:
+
             caveats.append(
-                "Billed amount is unavailable in the source data."
+                "Billed amount is unavailable "
+                "in the source data."
             )
 
         if collected_col not in df.columns:
+
             caveats.append(
-                "Collected amount is unavailable in the source data."
+                "Collected amount is unavailable "
+                "in the source data."
             )
+
+        # --------------------------------------------------
+        # Final financial result
+        # --------------------------------------------------
 
         return {
             "sector": sector or "All Sectors",
-            "total_work_orders": total_orders,
+            "total_work_orders": int(total_orders),
             "total_contracted_value_inr": total_contracted,
             "total_billed_value_inr": total_billed,
             "total_collected_value_inr": total_collected,
-            "outstanding_billed_value_inr": float(outstanding),
+            "outstanding_billed_value_inr": outstanding,
             "billing_percentage": billing_percentage,
             "collection_percentage": collection_percentage,
             "execution_statuses": execution_statuses,
