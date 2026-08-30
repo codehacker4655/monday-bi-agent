@@ -1,5 +1,3 @@
-The issue is a syntax error in your **Mermaid diagram block** under the ## 🏗️ Architecture section. You have plain text (Architecture Flow1. User -> Stre) placed directly inside the ```mermaid code block, which breaks GitHub's rendering.
-The polished, production-ready README.md with the fixed syntax is provided below. You can copy and paste this directly into your file.
 ```markdown
 # 🚀 Founder BI Agent — Monday.com Integration
 
