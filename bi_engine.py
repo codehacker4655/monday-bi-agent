@@ -10,6 +10,13 @@ class BIEngine:
     It does not call the LLM and does not modify the source DataFrames.
     """
 
+    # Status values are matched case-insensitively (see the casefold()
+    # calls below). Extend these sets if your board introduces new
+    # closed-deal phrasing. "dead" is the real value used in this
+    # dataset for lost deals — the literal string "lost" never appears.
+    WON_STATUS_VALUES = {"won"}
+    LOST_STATUS_VALUES = {"lost", "dead"}
+
     def __init__(self, deals_df: pd.DataFrame, wo_df: pd.DataFrame):
         self.deals_df = deals_df
         self.wo_df = wo_df
@@ -21,7 +28,6 @@ class BIEngine:
         column: str
     ) -> pd.DataFrame:
         """Filter a DataFrame by sector without changing the original data."""
-
         if not sector or column not in df.columns:
             return df.copy()
 
@@ -47,7 +53,6 @@ class BIEngine:
         Returns None when the denominator is zero,
         missing, NaN or infinite.
         """
-
         if numerator is None or denominator is None:
             return None
 
@@ -76,19 +81,15 @@ class BIEngine:
         Missing values are represented as 'Unknown'.
         Counts are converted to normal Python integers.
         """
-
         if series is None:
             return {}
 
         cleaned = series.copy()
-
         cleaned = cleaned.astype(object).where(
             cleaned.notna(),
             "Unknown"
         )
-
         cleaned = cleaned.astype(str).str.strip()
-
         cleaned = cleaned.replace(
             {
                 "": "Unknown",
@@ -99,7 +100,6 @@ class BIEngine:
         )
 
         counts = cleaned.value_counts(dropna=False)
-
         return {
             str(key): int(value)
             for key, value in counts.items()
@@ -112,15 +112,11 @@ class BIEngine:
 
         NaN and infinity become 0.0.
         """
-
         try:
             value = float(value)
-
             if not math.isfinite(value):
                 return 0.0
-
             return value
-
         except (TypeError, ValueError):
             return 0.0
 
@@ -136,7 +132,6 @@ class BIEngine:
         Calculate sales pipeline metrics with explicit
         data-quality caveats.
         """
-
         df = self._filter_by_sector(
             self.deals_df,
             sector,
@@ -146,54 +141,39 @@ class BIEngine:
         total_deals = len(df)
 
         val_col = "Masked Deal value"
-
         if val_col in df.columns:
-
             numeric_values = pd.to_numeric(
                 df[val_col],
                 errors="coerce"
             )
-
             known_values = numeric_values.dropna()
-
             total_recorded_deal_value = self._safe_number(
                 known_values.sum()
             )
-
             missing_value_count = int(
                 numeric_values.isna().sum()
             )
-
         else:
-
             total_recorded_deal_value = 0.0
             missing_value_count = total_deals
 
         if "Deal Stage" in df.columns:
-
             stage_distribution = self._safe_distribution(
                 df["Deal Stage"]
             )
-
         else:
-
             stage_distribution = {}
 
         if "Deal Status" in df.columns:
-
             status_distribution = self._safe_distribution(
                 df["Deal Status"]
             )
-
         else:
-
             status_distribution = {}
 
         won_deals = 0
         lost_deals = 0
-
         if "Deal Status" in df.columns:
-
             status = (
                 df["Deal Status"]
                 .fillna("")
@@ -201,32 +181,24 @@ class BIEngine:
                 .str.strip()
                 .str.casefold()
             )
-
             won_deals = int(
-                (status == "won").sum()
+                status.isin(self.WON_STATUS_VALUES).sum()
             )
-
             lost_deals = int(
-                (status == "lost").sum()
+                status.isin(self.LOST_STATUS_VALUES).sum()
             )
 
         caveats = []
-
         if missing_value_count > 0:
-
             caveats.append(
                 f"{missing_value_count} out of {total_deals} "
                 "deals have missing deal values."
             )
-
         if "Deal Stage" not in df.columns:
-
             caveats.append(
                 "Deal Stage is unavailable in the source data."
             )
-
         if "Deal Status" not in df.columns:
-
             caveats.append(
                 "Deal Status is unavailable in the source data."
             )
@@ -256,7 +228,6 @@ class BIEngine:
         Calculate contracted, billed, collected and
         outstanding values from Work Orders.
         """
-
         df = self._filter_by_sector(
             self.wo_df,
             sector,
@@ -268,39 +239,31 @@ class BIEngine:
         contract_col = (
             "Amount in Rupees (Incl of GST) (Masked)"
         )
-
         billed_col = (
             "Billed Value in Rupees (Incl of GST.) (Masked)"
         )
-
         collected_col = (
             "Collected Amount in Rupees (Incl of GST.) (Masked)"
         )
 
         def safe_sum(column: str) -> float:
-
             if column not in df.columns:
                 return 0.0
-
             numeric_values = pd.to_numeric(
                 df[column],
                 errors="coerce"
             )
-
             total = numeric_values.sum(
                 skipna=True
             )
-
             return self._safe_number(total)
 
         total_contracted = safe_sum(
             contract_col
         )
-
         total_billed = safe_sum(
             billed_col
         )
-
         total_collected = safe_sum(
             collected_col
         )
@@ -313,7 +276,6 @@ class BIEngine:
             total_billed,
             total_contracted
         )
-
         collection_percentage = self._safe_percentage(
             total_collected,
             total_billed
@@ -329,7 +291,6 @@ class BIEngine:
             if contract_col in df.columns
             else total_orders
         )
-
         missing_billed = (
             int(
                 pd.to_numeric(
@@ -340,7 +301,6 @@ class BIEngine:
             if billed_col in df.columns
             else total_orders
         )
-
         missing_collected = (
             int(
                 pd.to_numeric(
@@ -353,54 +313,39 @@ class BIEngine:
         )
 
         if "Execution Status" in df.columns:
-
             execution_statuses = self._safe_distribution(
                 df["Execution Status"]
             )
-
         else:
-
             execution_statuses = {}
 
         caveats = []
-
         if missing_contract > 0:
-
             caveats.append(
                 f"{missing_contract} work orders have missing "
                 "contracted amounts."
             )
-
         if missing_billed > 0:
-
             caveats.append(
                 f"{missing_billed} work orders have missing "
                 "billed amounts."
             )
-
         if missing_collected > 0:
-
             caveats.append(
                 f"{missing_collected} work orders have missing "
                 "collected amounts."
             )
-
         if contract_col not in df.columns:
-
             caveats.append(
                 "Contracted amount is unavailable "
                 "in the source data."
             )
-
         if billed_col not in df.columns:
-
             caveats.append(
                 "Billed amount is unavailable "
                 "in the source data."
             )
-
         if collected_col not in df.columns:
-
             caveats.append(
                 "Collected amount is unavailable "
                 "in the source data."
@@ -430,17 +375,13 @@ class BIEngine:
 
         This method does NOT assume that a deal corresponds
         to a work order.
-
         It only compares aggregated sector-level metrics.
         """
-
         deal_sector_column = "Sector/service"
         work_order_sector_column = "Sector"
 
         deal_sectors = set()
-
         if deal_sector_column in self.deals_df.columns:
-
             deal_sectors = set(
                 self.deals_df[deal_sector_column]
                 .dropna()
@@ -453,9 +394,7 @@ class BIEngine:
             )
 
         work_order_sectors = set()
-
         if work_order_sector_column in self.wo_df.columns:
-
             work_order_sectors = set(
                 self.wo_df[work_order_sector_column]
                 .dropna()
@@ -473,13 +412,10 @@ class BIEngine:
         )
 
         sector_analysis = []
-
         for sector in all_sectors:
-
             pipeline = self.get_pipeline_health(
                 sector=sector
             )
-
             financial = self.get_financial_execution_summary(
                 sector=sector
             )
@@ -487,7 +423,6 @@ class BIEngine:
             sector_analysis.append(
                 {
                     "sector": sector,
-
                     "pipeline": {
                         "total_deals": pipeline[
                             "total_deals"
@@ -508,7 +443,6 @@ class BIEngine:
                             "stage_distribution"
                         ],
                     },
-
                     "work_orders": {
                         "total_work_orders": financial[
                             "total_work_orders"
@@ -535,7 +469,6 @@ class BIEngine:
                             "execution_statuses"
                         ],
                     },
-
                     "data_caveats": (
                         pipeline["data_caveats"]
                         + financial["data_caveats"]
@@ -546,12 +479,10 @@ class BIEngine:
         # --------------------------------------------------
         # Sectors that exist on only one board
         # --------------------------------------------------
-
         only_in_deals = sorted(
             deal_sectors - work_order_sectors,
             key=lambda value: value.casefold()
         )
-
         only_in_work_orders = sorted(
             work_order_sectors - deal_sectors,
             key=lambda value: value.casefold()
