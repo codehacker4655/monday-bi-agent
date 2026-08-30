@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+requests
+pydantic
+langchain
+langchain-community
+langchain-groq
+pandas
+openpyxl
+numpy
+streamlit
+python-dotenv
