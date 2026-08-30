@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Any
 import math
+import numbers
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -43,22 +44,31 @@ class QueryRequest(BaseModel):
 # Convert NaN / Infinity into JSON-safe values
 # --------------------------------------------------
 def sanitize_for_json(obj):
+    """
+    Recursively convert non-JSON-safe numeric values
+    such as NaN and Infinity into None.
+    """
+
     if isinstance(obj, dict):
         return {
             key: sanitize_for_json(value)
             for key, value in obj.items()
         }
 
-    if isinstance(obj, list):
+    if isinstance(obj, (list, tuple)):
         return [
             sanitize_for_json(value)
             for value in obj
         ]
 
-    if isinstance(obj, float) and (
-        math.isnan(obj) or math.isinf(obj)
-    ):
-        return None
+    # Handle NumPy/Python numeric values
+    if isinstance(obj, numbers.Real):
+        value = float(obj)
+
+        if math.isnan(value) or math.isinf(value):
+            return None
+
+        return value
 
     return obj
 
