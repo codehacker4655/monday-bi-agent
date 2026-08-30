@@ -1,28 +1,28 @@
 ```markdown
 # Founder BI Agent — Monday.com Integration
 
-A Business Intelligence agent that connects to live Monday.com boards and answers executive-style business questions across sales pipeline and work-order execution data.
+A Business Intelligence agent that connects to live Monday.com boards and answers executive-style business questions across sales pipeline and work-order execution data[span_0](start_span)[span_0](end_span).
 
 ## Overview
 
 The Founder BI Agent combines a natural-language query planner with a deterministic BI calculation layer. 
 
-The LLM is responsible for understanding the user's question and generating the final explanation, while business metrics are calculated from live Monday.com data using deterministic Python/pandas logic.
+The LLM is responsible for understanding the user's question and generating the final explanation, while business metrics are calculated from live Monday.com data using deterministic Python/pandas logic[span_1](start_span)[span_1](end_span).
 
 ### Core Capabilities
 
-- Fetches live data from Monday.com using the GraphQL API.
-- Works across the Deal Funnel and Work Order Tracker boards.
+- Fetches live data from Monday.com using the GraphQL API[span_2](start_span)[span_2](end_span).
+- Works across the Deal Funnel and Work Order Tracker boards[span_3](start_span)[span_3](end_span).
 - Cleans and normalizes text, numeric, monetary, and date fields.
 - Dynamically discovers sectors from the live Monday.com boards.
-- Understands natural-language business questions.
+- Understands natural-language business questions[span_4](start_span)[span_4](end_span).
 - Identifies user intent, relevant sector, and relevant board(s).
-- Supports pipeline, deal-value, financial, collections, and execution-status questions.
-- Supports lightweight conversational context for follow-up questions.
+- Supports pipeline, deal-value, financial, collections, and execution-status questions[span_5](start_span)[span_5](end_span).
+- Supports lightweight conversational context for follow-up questions[span_6](start_span)[span_6](end_span).
 - Calculates BI metrics deterministically using pandas.
-- Explicitly surfaces missing-data and data-quality caveats.
-- Uses Groq/LangChain to generate concise executive-facing responses.
-- Provides a Streamlit chat interface backed by a FastAPI API.
+- Explicitly surfaces missing-data and data-quality caveats[span_7](start_span)[span_7](end_span).
+- Uses Groq/LangChain to generate concise executive-facing responses[span_8](start_span)[span_8](end_span).
+- Provides a Streamlit chat interface backed by a FastAPI API[span_9](start_span)[span_9](end_span).
 
 ---
 
@@ -228,47 +228,23 @@ git clone [https://github.com/codehacker4655/monday-bi-agent.git](https://github
 cd monday-bi-agent
 
 ```
-### 2. Create a virtual environment
- * **Windows:**
-   ```cmd
-   python -m venv venv
-   venv\Scripts\activate
-   
-   ```
- * **macOS/Linux:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   
-   ```
-### 3. Install dependencies
+### 2. Install dependencies
 ```bash
 pip install -r requirements.txt
 
 ```
-### 4. Configure environment variables
-Create a .env file in the root directory:
-```env
-MONDAY_API_KEY=your_monday_api_key
-DEALS_BOARD_ID=your_deals_board_id
-WORK_ORDERS_BOARD_ID=your_work_orders_board_id
-GROQ_API_KEY=your_groq_api_key
-
-```
-## Running the Backend
-Start the FastAPI backend:
+### 3. Run Backend API
 ```bash
 uvicorn main:app --reload
 
 ```
 The backend will run locally at http://localhost:8000. The main endpoint is POST /api/chat.
-## Running the Frontend
-Open a second terminal, activate the virtual environment, and run:
+### 4. Run Streamlit App
+Open a second terminal window and run:
 ```bash
 streamlit run app.py
 
 ```
-In the Streamlit sidebar, set the backend endpoint to http://localhost:8000/api/chat.
 ## API Integration Specification
 ### Request Example (POST /api/chat)
 ```json
