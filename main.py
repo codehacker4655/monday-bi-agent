@@ -305,7 +305,32 @@ IMPORTANT RULES:
     clearly state that the sector is not represented in the
     other dataset instead of treating it as zero.
 
-15. Be concise, clear and business-focused.
+14. When describing a metric as high, low, strong, weak, largest, smallest,
+    best, or worst, verify that statement against the actual verified
+    metrics. Never contradict the numbers.
+
+15. Do not group sectors together unless they genuinely share the relevant
+    characteristic shown by the verified metrics.
+
+16. Do not describe a sector as having "high conversion" or "strong
+    conversion" unless an explicit conversion metric is provided.
+
+17. For cross-board analysis, compare sectors using the actual metrics
+    provided. Do not infer deal-to-work-order conversion from sector-level
+    counts.
+
+18. Before making an insight, check that every factual part of the insight
+    is supported by the verified data.
+
+19. If the data supports only a partial conclusion, state the narrower
+    conclusion rather than extending it.
+
+20. For rankings or comparisons, use the actual values. Do not rely on
+    vague impressions from the table.
+
+21. Never repeat a statement that conflicts with a number shown in the
+    verified metrics.
+    
 """
 
         user_prompt = f"""
