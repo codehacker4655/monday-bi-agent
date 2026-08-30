@@ -1,5 +1,6 @@
 import os
 from typing import Dict, Any
+import math
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from query_planner import QueryPlanner
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 
+
 load_dotenv()
 
 app = FastAPI(title="Monday.com Business Intelligence Agent")
@@ -20,6 +22,7 @@ app = FastAPI(title="Monday.com Business Intelligence Agent")
 DEALS_BOARD_ID = os.getenv("DEALS_BOARD_ID")
 WORK_ORDERS_BOARD_ID = os.getenv("WORK_ORDERS_BOARD_ID")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
 
 if not DEALS_BOARD_ID:
     raise RuntimeError("DEALS_BOARD_ID is missing from .env")
@@ -36,6 +39,30 @@ class QueryRequest(BaseModel):
     session_id: str
 
 
+# --------------------------------------------------
+# Convert NaN / Infinity into JSON-safe values
+# --------------------------------------------------
+def sanitize_for_json(obj):
+    if isinstance(obj, dict):
+        return {
+            key: sanitize_for_json(value)
+            for key, value in obj.items()
+        }
+
+    if isinstance(obj, list):
+        return [
+            sanitize_for_json(value)
+            for value in obj
+        ]
+
+    if isinstance(obj, float) and (
+        math.isnan(obj) or math.isinf(obj)
+    ):
+        return None
+
+    return obj
+
+
 # Stores only the small amount of context needed
 # to understand follow-up questions.
 conversation_contexts: Dict[str, Dict[str, Any]] = {}
@@ -44,6 +71,7 @@ conversation_contexts: Dict[str, Dict[str, Any]] = {}
 @app.post("/api/chat")
 async def process_bi_query(request: QueryRequest):
     try:
+
         # --------------------------------------------------
         # 1. Fetch live data from Monday.com
         # --------------------------------------------------
@@ -112,7 +140,7 @@ async def process_bi_query(request: QueryRequest):
         # 6. Handle ambiguous questions
         # --------------------------------------------------
         if plan.get("needs_clarification"):
-            return {
+            return sanitize_for_json({
                 "answer": plan.get(
                     "clarification_question",
                     "Could you clarify what information you need?"
@@ -120,7 +148,7 @@ async def process_bi_query(request: QueryRequest):
                 "plan": plan,
                 "pipeline_data": {},
                 "financial_data": {}
-            }
+            })
 
         sector_target = plan.get("sector")
         intent = plan.get("intent")
@@ -216,12 +244,15 @@ Verified Work Order Metrics:
             HumanMessage(content=user_prompt)
         ])
 
-        return {
+        # --------------------------------------------------
+        # 10. Return JSON-safe response
+        # --------------------------------------------------
+        return sanitize_for_json({
             "answer": response.content,
             "plan": plan,
             "pipeline_data": pipeline_summary,
             "financial_data": financial_summary
-        }
+        })
 
     except Exception as e:
         raise HTTPException(
