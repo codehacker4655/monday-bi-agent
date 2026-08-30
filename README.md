@@ -1,301 +1,453 @@
-```markdown
-# Founder BI Agent — Monday.com Integration
+# 🚀 Founder BI Agent — Monday.com Integration
 
-A Business Intelligence agent that connects to live Monday.com boards and answers executive-style business questions across sales pipeline and work-order execution data[span_0](start_span)[span_0](end_span).
-
-## Overview
-
-The Founder BI Agent combines a natural-language query planner with a deterministic BI calculation layer. 
-
-The LLM is responsible for understanding the user's question and generating the final explanation, while business metrics are calculated from live Monday.com data using deterministic Python/pandas logic[span_1](start_span)[span_1](end_span).
-
-### Core Capabilities
-
-- Fetches live data from Monday.com using the GraphQL API[span_2](start_span)[span_2](end_span).
-- Works across the Deal Funnel and Work Order Tracker boards[span_3](start_span)[span_3](end_span).
-- Cleans and normalizes text, numeric, monetary, and date fields.
-- Dynamically discovers sectors from the live Monday.com boards.
-- Understands natural-language business questions[span_4](start_span)[span_4](end_span).
-- Identifies user intent, relevant sector, and relevant board(s).
-- Supports pipeline, deal-value, financial, collections, and execution-status questions[span_5](start_span)[span_5](end_span).
-- Supports lightweight conversational context for follow-up questions[span_6](start_span)[span_6](end_span).
-- Calculates BI metrics deterministically using pandas.
-- Explicitly surfaces missing-data and data-quality caveats[span_7](start_span)[span_7](end_span).
-- Uses Groq/LangChain to generate concise executive-facing responses[span_8](start_span)[span_8](end_span).
-- Provides a Streamlit chat interface backed by a FastAPI API[span_9](start_span)[span_9](end_span).
+> **Ask business questions in plain English. Get executive-ready insights from live Monday.com data.**
 
 ---
 
-## Architecture
+## 🎯 What is this?
 
-```text
-                         User
-                          |
-                          v
-                 +------------------+
-                 |   Streamlit UI   |
-                 |     app.py       |
-                 +--------+---------+
-                          |
-                          | POST /api/chat
-                          v
-                 +------------------+
-                 |  FastAPI Backend |
-                 |     main.py      |
-                 +--------+---------+
-                          |
-             +------------+-------------+
-             |                          |
-             v                          v
-     +---------------+          +---------------+
-     | MondayClient  |          | QueryPlanner  |
-     | GraphQL API   |          | Groq / LLM    |
-     +-------+-------+          +---------------+
-             |
-             v
-     +---------------+
-     |  cleaner.py   |
-     | Data Cleaning |
-     +-------+-------+
-             |
-             v
-     +---------------+
-     |   BIEngine    |
-     | Deterministic |
-     |   BI Metrics  |
-     +-------+-------+
-             |
-             +----------------------+
-                                    |
-                                    v
-                           +------------------+
-                           | Groq / LangChain |
-                           | Final Response   |
-                           +------------------+
+**Founder BI Agent** is a Business Intelligence agent that connects to live **Monday.com** boards and converts natural-language business questions into verified, data-driven answers.
 
-```
-## Project Structure
-```text
+It combines:
+
+- 🧠 **LLM-powered query understanding**
+- 📊 **Deterministic BI calculations**
+- 🔗 **Monday.com GraphQL API**
+- 💬 **Streamlit chat interface**
+- ⚡ **FastAPI backend**
+- 🛡️ **Data-quality and missing-value handling**
+
+---
+
+## ✨ Core Capabilities
+
+| Capability | Description |
+|---|---|
+| 🔗 Live Monday.com Data | Fetches current data directly from Monday.com |
+| 📈 Pipeline Intelligence | Analyzes deal pipeline and deal values |
+| 💰 Financial Intelligence | Calculates contracted, billed, collected and outstanding amounts |
+| 🏗️ Work Order Intelligence | Analyzes work-order execution status |
+| 🧠 Natural Language | Ask questions without writing SQL or Python |
+| 🎯 Sector Filtering | Dynamically identifies and filters by sector |
+| 💬 Follow-up Questions | Maintains lightweight conversation context |
+| 🛡️ Verified Metrics | Business calculations are performed deterministically |
+| ⚠️ Data Quality | Explicitly surfaces missing or unavailable data |
+| 🤖 LLM Explanation | Converts verified metrics into concise executive answers |
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    A[👤 User] --> B[💬 Streamlit UI]
+    B --> C[⚡ FastAPI API]
+
+    C --> D[🔗 Monday.com Client]
+    D --> E[(📊 Deal Funnel)]
+    D --> F[(🏗️ Work Order Tracker)]
+
+    E --> G[🧹 Data Cleaning]
+    F --> G
+
+    G --> H[🧠 Query Planner]
+    H --> I[📊 BI Engine]
+
+    I --> J[✅ Verified Metrics]
+    J --> K[🤖 Groq LLM]
+
+    K --> L[💡 Executive Answer]
+    L --> B
+
+
+---
+
+🔄 How It Works
+
+<details>
+<summary><b>1️⃣ User asks a question</b></summary>The user enters a natural-language business question through the Streamlit chat interface.
+
+Example:
+
+> "How is our pipeline looking for Renewable Energy?"
+
+
+
+</details><details>
+<summary><b>2️⃣ Live data is fetched</b></summary>The backend connects to Monday.com through its GraphQL API and retrieves the required board data.
+
+</details><details>
+<summary><b>3️⃣ Data is cleaned</b></summary>Raw Monday.com data is normalized before calculations.
+
+This includes handling:
+
+Text fields
+
+Numeric values
+
+Monetary values
+
+Dates
+
+Missing values
+
+Sector names
+
+
+</details><details>
+<summary><b>4️⃣ Query Planner understands the question</b></summary>The LLM determines the user's:
+
+Intent
+
+Relevant sector
+
+Relevant board(s)
+
+Whether clarification is required
+
+
+</details><details>
+<summary><b>5️⃣ BI Engine calculates the metrics</b></summary>The BI Engine performs deterministic calculations using Pandas.
+
+The LLM does not calculate the business metrics.
+
+</details><details>
+<summary><b>6️⃣ LLM generates the explanation</b></summary>The verified metrics are passed to the LLM, which converts them into a concise executive-style response.
+
+The LLM is instructed to:
+
+Never invent numbers
+
+Use only verified metrics
+
+Distinguish missing data from zero
+
+Mention important data-quality caveats
+
+
+</details>
+---
+
+📊 Supported Business Questions
+
+📈 Pipeline
+
+Examples:
+
+How is our pipeline looking?
+
+What is the pipeline value for Renewable Energy?
+
+How many deals have we won?
+
+How many deals have been lost?
+
+💰 Financial
+
+Examples:
+
+How much have we billed?
+
+How much have we collected?
+
+What is the outstanding billed amount?
+
+What percentage of the contracted value has been billed?
+
+🏗️ Work Orders
+
+Examples:
+
+How many work orders do we have?
+
+What is the execution status?
+
+How much value has been contracted?
+
+What is the collection percentage?
+
+💬 Follow-up Questions
+
+The application maintains lightweight session context so users can ask follow-up questions.
+
+Example:
+
+User: How is our pipeline for Renewable Energy?
+
+Agent: ...
+
+User: How many of those deals are won?
+
+Agent: ...
+
+
+---
+
+🧠 Design Philosophy
+
+LLM for Understanding — Code for Truth
+
+A key design principle of this project is:
+
+Natural Language
+       ↓
+     LLM
+       ↓
+ Query Plan
+       ↓
+Deterministic BI
+       ↓
+Verified Metrics
+       ↓
+     LLM
+       ↓
+Executive Answer
+
+The LLM is responsible for understanding and explaining.
+
+The BI layer is responsible for calculating business metrics.
+
+This reduces the risk of the LLM hallucinating financial or pipeline numbers.
+
+
+---
+
+🛡️ Data Quality
+
+The system explicitly handles incomplete data.
+
+For example:
+
+5 out of 42 deals have missing deal values.
+
+Instead of treating missing values as zero, the system surfaces them as a data-quality caveat.
+
+Percentages are also calculated safely:
+
+If denominator = 0
+        ↓
+Return None
+        ↓
+Do not incorrectly report 0%
+
+
+---
+
+🗂️ Project Structure
+
 monday-bi-agent/
 │
 ├── app.py
-├── main.py
+├── streamlit_app.py
+│
 ├── Monday_client.py
 ├── cleaner.py
 ├── bi_engine.py
 ├── query_planner.py
+│
 ├── requirements.txt
+├── README.md
 ├── .gitignore
-└── README.md
+│
+└── .env
 
-```
-### File Responsibilities
-| File | Responsibility |
-|---|---|
-| app.py | Streamlit frontend and chat interface |
-| main.py | FastAPI backend and overall request orchestration |
-| Monday_client.py | Monday.com GraphQL API integration and board data retrieval |
-| cleaner.py | Data cleaning and normalization |
-| bi_engine.py | Deterministic BI calculations |
-| query_planner.py | Natural-language query understanding and planning |
-| requirements.txt | Python dependencies |
-| .gitignore | Prevents secrets and unnecessary files from being committed |
-## Data Flow
- 1. The user enters a business question in the Streamlit interface.
- 2. Streamlit sends the question and session ID to the FastAPI backend.
- 3. The backend fetches live data from the configured Monday.com boards.
- 4. The retrieved data is cleaned and normalized.
- 5. QueryPlanner identifies:
-   * User intent
-   * Relevant sector
-   * Relevant board(s)
-   * Whether the question is a follow-up
-   * Whether clarification is required
- 6. BIEngine performs deterministic calculations on the relevant data.
- 7. The verified metrics are provided to the LLM.
- 8. Groq generates a natural-language executive response using the verified metrics.
- 9. The API returns the answer together with the query plan and calculated BI data.
-## Environment Variables
-Create a .env file for local development. **Never commit real API keys or secrets to GitHub.**
-```env
+> 🔐 .env is used for local development and should never be committed to GitHub.
+
+
+
+
+---
+
+🔑 Environment Variables
+
+Create a .env file locally:
+
 MONDAY_API_KEY=your_monday_api_key
 DEALS_BOARD_ID=your_deals_board_id
 WORK_ORDERS_BOARD_ID=your_work_orders_board_id
 GROQ_API_KEY=your_groq_api_key
 
-```
-The same variables should be configured as environment variables/secrets in your deployment platform.
-## Monday.com Configuration
-The application uses two Monday.com boards:
-### 1. Deal Funnel
-The application dynamically retrieves the board's column IDs and maps them to their human-readable column titles. The BI layer uses the following relevant columns:
- * Sector/service
- * Masked Deal value
- * Deal Stage
- * Deal Status
- * Close Date (A)
- * Tentative Close Date
- * Created Date
-### 2. Work Order Tracker
-The relevant columns include:
- * Sector
- * Amount in Rupees (Incl of GST) (Masked)
- * Billed Value in Rupees (Incl of GST.) (Masked)
- * Collected Amount in Rupees (Incl of GST.) (Masked)
- * Execution Status
-Additional financial and date fields are normalized when present.
-### Board IDs
-Board IDs are supplied through environment variables to separate configuration from application code:
-```env
-DEALS_BOARD_ID=your_deals_board_id
-WORK_ORDERS_BOARD_ID=your_work_orders_board_id
+For production deployment, configure these values as environment variables in the hosting platform.
 
-```
-## Query Planner
-The Query Planner converts a natural-language business question into a structured plan. It determines:
- * Intent
- * Sector
- * Relevant board(s)
- * Follow-up status
- * Whether clarification is required
-### Supported Intents
- * pipeline_health
- * pipeline_value
- * financial_summary
- * collections
- * execution_status
- * general
-The planner does not calculate business metrics directly. It uses the sectors discovered dynamically from the live Monday.com boards rather than relying on a hard-coded sector list.
-## BI Engine
-BIEngine is responsible for deterministic business calculations. This separation is intentional:
-```text
-LLM
- ↓
-Understands question
- ↓
-Query Plan
- ↓
-BIEngine
- ↓
-Verified calculations
- ↓
-LLM
- ↓
-Executive explanation
 
-```
-The LLM is therefore not responsible for independently calculating financial or pipeline metrics.
-### Pipeline Metrics
- * Total number of deals
- * Recorded deal value
- * Won deals
- * Lost deals
- * Deal stage distribution
- * Deal status distribution
- * Data-quality caveats
-### Work Order Metrics
- * Total work orders
- * Contracted value
- * Billed value
- * Collected value
- * Outstanding billed value
- * Billing percentage
- * Collection percentage
- * Execution status distribution
- * Data-quality caveats
-## Data Quality Handling
-The application explicitly handles missing and invalid data. Examples include:
- * Missing deal values
- * Missing contracted amounts
- * Missing billed amounts
- * Missing collected amounts
- * Missing status/stage information
- * Invalid numeric values
- * Missing dates
-Missing data is not automatically treated as zero when doing so could create a misleading business interpretation. Percentages are also handled safely when their denominator is zero or unavailable.
-Distribution values with missing categories are represented as Unknown. This prevents missing values from causing invalid JSON responses while preserving the data-quality signal.
-## Conversation Context
-The application maintains lightweight session-level context to support follow-up questions. For example:
-> **User:** How is the pipeline looking for Renewables?
-> **Agent:** [Provides Renewables pipeline metrics]
-> **User:** What about collections?
-> 
-The second question automatically utilizes the previously identified sector (Renewables). Only minimal context required for follow-up understanding is retained.
-## Local Setup
-### 1. Clone the repository
-```bash
-git clone [https://github.com/codehacker4655/monday-bi-agent.git](https://github.com/codehacker4655/monday-bi-agent.git)
+---
+
+⚙️ Local Setup
+
+1. Clone the repository
+
+git clone https://github.com/codehacker4655/monday-bi-agent.git
 cd monday-bi-agent
 
-```
-### 2. Install dependencies
-```bash
+2. Create a virtual environment
+
+python -m venv venv
+
+Activate it:
+
+Windows
+
+venv\Scripts\activate
+
+macOS/Linux
+
+source venv/bin/activate
+
+3. Install dependencies
+
 pip install -r requirements.txt
 
-```
-### 3. Run Backend API
-```bash
-uvicorn main:app --reload
+4. Configure environment variables
 
-```
-The backend will run locally at http://localhost:8000. The main endpoint is POST /api/chat.
-### 4. Run Streamlit App
-Open a second terminal window and run:
-```bash
-streamlit run app.py
+Create .env and add your credentials:
 
-```
-## API Integration Specification
-### Request Example (POST /api/chat)
-```json
-{
-  "query": "How is our pipeline looking for renewables?",
-  "session_id": "example-session-id"
-}
+MONDAY_API_KEY=...
+DEALS_BOARD_ID=...
+WORK_ORDERS_BOARD_ID=...
+GROQ_API_KEY=...
 
-```
-### Response Example
-```json
-{
-  "answer": "Executive response text generated by LLM...",
-  "plan": {},
-  "pipeline_data": {},
-  "financial_data": {}
-}
+5. Start the FastAPI backend
 
-```
-## Deployment
-The application can be deployed as two distinct cloud services:
-### FastAPI Backend (e.g., Render)
-Start command:
-```bash
-uvicorn main:app --host 0.0.0.0 --port $PORT
+uvicorn app:app --reload
 
-```
-Set environment variables (MONDAY_API_KEY, DEALS_BOARD_ID, WORK_ORDERS_BOARD_ID, GROQ_API_KEY) in the platform's settings.
-### Streamlit Frontend (e.g., Streamlit Community Cloud)
-Deploy using app.py as the entry point and set the API endpoint URL variable to point to your hosted FastAPI backend domain:
-https://<backend-domain>/api/chat
-## Design Decisions
- * **Deterministic BI Layer:** Metrics are computed via Python/pandas to eliminate LLM mathematical hallucinations.
- * **Dynamic Sector Discovery:** Sector categories are inferred directly from live board schema values.
- * **Separation of Concerns:** Clear pipeline flow (Data Ingestion \rightarrow Cleaning \rightarrow Intent Planning \rightarrow BI Math \rightarrow LLM Synthesis).
- * **Data Quality Transparency:** Surfaces missing fields explicitly to leadership users rather than masking them as zeros.
-## Limitations & Future Roadmap
- * Advanced multi-board relational join features.
- * Automated time-series forecasting and trend metrics.
- * Exportable executive dashboards (PDF/CSV summaries).
- * High-performance caching layer to minimize Monday.com API rate limits.
- * Persistent database storage for long-term conversation history.
-## Technology Stack
- * **Python**
- * **FastAPI**
- * **Streamlit**
- * **Pandas & NumPy**
- * **Monday.com GraphQL API**
- * **LangChain & Groq**
- * **Pydantic**
- * **python-dotenv**
-```
+6. Start the Streamlit frontend
 
-```
+streamlit run streamlit_app.py
+
+
+---
+
+🌐 Deployment
+
+The application can be deployed using a cloud platform such as Render.
+
+Typical architecture:
+
+Streamlit Frontend
+        │
+        ▼
+FastAPI Backend
+        │
+        ├── Monday.com
+        │
+        └── Groq
+
+Production secrets should be configured through environment variables rather than committed to the repository.
+
+
+---
+
+🧪 Example Interaction
+
+👤 User
+How is our pipeline looking for Renewable Energy?
+
+🤖 Founder BI Agent
+
+Pipeline analysis for Renewable Energy:
+
+• Total deals: ...
+• Recorded pipeline value: ...
+• Won deals: ...
+• Lost deals: ...
+
+⚠️ Data quality:
+Some deals have missing deal values.
+
+The exact figures are calculated from the live Monday.com data.
+
+
+---
+
+🧰 Technology Stack
+
+Technology	Purpose
+
+🐍 Python	Core application
+⚡ FastAPI	Backend API
+💬 Streamlit	User interface
+📊 Pandas	Deterministic BI calculations
+🔗 Monday.com GraphQL API	Live business data
+🤖 Groq	LLM inference
+🦜 LangChain	LLM integration
+☁️ Render	Deployment
+
+
+
+---
+
+🔐 Security Notes
+
+API keys are stored as environment variables.
+
+.env should remain in .gitignore.
+
+Secrets should never be hard-coded.
+
+Production credentials should be configured through the deployment platform's secret/environment-variable system.
+
+
+
+---
+
+🎯 Key Engineering Decisions
+
+<details>
+<summary><b>Why not let the LLM calculate everything?</b></summary>LLMs are useful for interpreting natural-language questions, but deterministic code is more reliable for financial and business calculations.
+
+Therefore:
+
+LLM → intent and explanation
+
+Pandas/BI Engine → calculations
+
+</details><details>
+<summary><b>Why dynamically discover sectors?</b></summary>The application reads the actual sector values present in Monday.com instead of relying on a hard-coded list.
+
+This allows the system to adapt when new sectors appear in the boards.
+
+</details><details>
+<summary><b>Why explicitly track missing values?</b></summary>Missing data and zero are not the same thing.
+
+For example:
+
+Missing deal value ≠ ₹0 deal value
+
+The system therefore surfaces missing data instead of silently converting it into a misleading business result.
+
+</details>
+---
+
+🚀 Future Improvements
+
+Potential future enhancements include:
+
+📅 Advanced date-based analysis
+
+📊 More pipeline KPIs
+
+📈 Trend analysis
+
+🔍 Deeper cross-board relationships
+
+💾 Persistent conversation memory
+
+🧪 Automated test coverage
+
+⚡ Caching for faster responses
+
+📉 Executive dashboards and visualizations
+
+🧠 More advanced query planning
+
+
+
+---
+
+👨‍💻 Project
+
+Founder BI Agent — Monday.com Integration
+
+Built as a full-stack AI + Business Intelligence application combining live business data, deterministic analytics, and natural-language interaction.
+
+⭐ If you find the project useful, consider giving the repository a star!
