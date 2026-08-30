@@ -61,7 +61,6 @@ def sanitize_for_json(obj):
             for value in obj
         ]
 
-    # Handle NumPy/Python numeric values
     if isinstance(obj, numbers.Real):
         value = float(obj)
 
@@ -73,13 +72,15 @@ def sanitize_for_json(obj):
     return obj
 
 
-# Stores only the small amount of context needed
-# to understand follow-up questions.
+# --------------------------------------------------
+# Conversation context
+# --------------------------------------------------
 conversation_contexts: Dict[str, Dict[str, Any]] = {}
 
 
 @app.post("/api/chat")
 async def process_bi_query(request: QueryRequest):
+
     try:
 
         # --------------------------------------------------
@@ -99,6 +100,7 @@ async def process_bi_query(request: QueryRequest):
         # 2. Clean and normalize the data
         # --------------------------------------------------
         deals_df = clean_deals_dataframe(raw_deals)
+
         wo_df = clean_work_orders_dataframe(raw_wo)
 
         # --------------------------------------------------
@@ -135,7 +137,7 @@ async def process_bi_query(request: QueryRequest):
         )
 
         # --------------------------------------------------
-        # 5. Understand the user's question
+        # 5. Understand user's question
         # --------------------------------------------------
         planner = QueryPlanner(GROQ_API_KEY)
 
@@ -150,6 +152,7 @@ async def process_bi_query(request: QueryRequest):
         # 6. Handle ambiguous questions
         # --------------------------------------------------
         if plan.get("needs_clarification"):
+
             return sanitize_for_json({
                 "answer": plan.get(
                     "clarification_question",
@@ -157,7 +160,8 @@ async def process_bi_query(request: QueryRequest):
                 ),
                 "plan": plan,
                 "pipeline_data": {},
-                "financial_data": {}
+                "financial_data": {},
+                "cross_board_data": {}
             })
 
         sector_target = plan.get("sector")
@@ -173,36 +177,61 @@ async def process_bi_query(request: QueryRequest):
 
         pipeline_summary = {}
         financial_summary = {}
+        cross_board_summary = {}
 
+        # --------------------------------------------------
+        # Pipeline questions
+        # --------------------------------------------------
         if intent in {
             "pipeline_health",
             "pipeline_value"
         }:
+
             pipeline_summary = bi.get_pipeline_health(
                 sector=sector_target
             )
 
+        # --------------------------------------------------
+        # Financial / collection / execution questions
+        # --------------------------------------------------
         elif intent in {
             "financial_summary",
             "collections",
             "execution_status"
         }:
-            financial_summary = bi.get_financial_execution_summary(
-                sector=sector_target
+
+            financial_summary = (
+                bi.get_financial_execution_summary(
+                    sector=sector_target
+                )
             )
 
+        # --------------------------------------------------
+        # Cross-board questions
+        # --------------------------------------------------
+        elif intent == "cross_board_analysis":
+
+            cross_board_summary = (
+                bi.get_cross_board_analysis(
+                    sector=sector_target
+                )
+            )
+
+        # --------------------------------------------------
+        # General questions
+        # --------------------------------------------------
         else:
-            # General questions may require both datasets.
+
             pipeline_summary = bi.get_pipeline_health(
                 sector=sector_target
             )
 
-            financial_summary = bi.get_financial_execution_summary(
-                sector=sector_target
+            financial_summary = (
+                bi.get_financial_execution_summary()
             )
 
         # --------------------------------------------------
-        # 8. Save context for the next question
+        # 8. Save context for follow-up questions
         # --------------------------------------------------
         conversation_contexts[request.session_id] = {
             "sector": sector_target,
@@ -211,7 +240,7 @@ async def process_bi_query(request: QueryRequest):
         }
 
         # --------------------------------------------------
-        # 9. Generate the final natural-language answer
+        # 9. Generate final natural-language answer
         # --------------------------------------------------
         llm = ChatGroq(
             model_name="openai/gpt-oss-120b",
@@ -220,19 +249,65 @@ async def process_bi_query(request: QueryRequest):
         )
 
         system_prompt = """
+
 You are a Monday.com Business Intelligence Agent for executives.
 
 Answer the user's question using ONLY the verified BI metrics
-provided below.
+provided by the analytics layer.
 
-IMPORTANT:
-- Never invent numbers.
-- Never calculate business metrics yourself when the verified
-  metrics already provide them.
-- Clearly distinguish missing data from zero.
-- Mention relevant data-quality caveats.
-- If the requested metric is not available, say so.
-- Be concise, clear and business-focused.
+IMPORTANT RULES:
+
+1. Never invent numbers, sectors, statuses or relationships.
+
+2. Never assume that one deal corresponds to one work order
+   unless an explicit mapping is provided.
+
+3. Never call work orders "active", "completed", "pending",
+   or any other execution state unless that state exists in
+   the verified execution-status data.
+
+4. Never claim that pipeline has "converted" into work orders
+   unless an explicit deal-to-work-order mapping is provided.
+
+5. Missing data is NOT the same as zero.
+
+6. If a metric is unavailable, say that it is unavailable.
+
+7. When comparing sectors, use ONLY the verified sector-level
+   metrics provided by the analytics layer.
+
+8. Insights must be directly supported by the verified metrics.
+
+9. You may explain what a verified pattern could indicate,
+   but do not present an unverified cause as a fact.
+
+10. For recommendations, use careful decision-support language
+    such as:
+
+    "leadership may want to investigate..."
+    "this warrants attention because..."
+    "the data suggests..."
+
+    Do NOT claim unsupported causes as facts.
+
+11. For cross-board questions, structure the answer as:
+
+    - What the data shows
+    - Important patterns or gaps
+    - What those patterns may indicate
+    - What leadership could investigate
+
+12. Do not claim that a strong pipeline automatically means
+    strong execution.
+
+13. Do not claim that pipeline has converted into work orders
+    unless the dataset explicitly provides such a relationship.
+
+14. When a sector exists in one board but not the other,
+    clearly state that the sector is not represented in the
+    other dataset instead of treating it as zero.
+
+15. Be concise, clear and business-focused.
 """
 
         user_prompt = f"""
@@ -247,6 +322,9 @@ Verified Pipeline Metrics:
 
 Verified Work Order Metrics:
 {financial_summary}
+
+Verified Cross-Board Metrics:
+{cross_board_summary}
 """
 
         response = llm.invoke([
@@ -261,10 +339,12 @@ Verified Work Order Metrics:
             "answer": response.content,
             "plan": plan,
             "pipeline_data": pipeline_summary,
-            "financial_data": financial_summary
+            "financial_data": financial_summary,
+            "cross_board_data": cross_board_summary
         })
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e)

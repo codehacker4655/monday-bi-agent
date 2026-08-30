@@ -40,11 +40,6 @@ class QueryPlanner:
         deal_sectors = deal_sectors or []
         work_order_sectors = work_order_sectors or []
 
-        available_sectors = {
-            "deal_funnel": deal_sectors,
-            "work_order_tracker": work_order_sectors
-        }
-
         system_prompt = f"""
 You are the Query Planner for a Monday.com Business Intelligence Agent.
 
@@ -91,7 +86,12 @@ SUPPORTED INTENTS:
    Questions about work-order execution,
    completed/in-progress/pending execution, etc.
 
-6. general
+6. cross_board_analysis
+   Questions that compare the sales pipeline and work-order
+   execution, especially by sector, or ask for patterns,
+   gaps, opportunities, or risks across both datasets.
+
+7. general
    Questions that do not clearly fit the above.
 
 BOARD SELECTION:
@@ -99,6 +99,7 @@ BOARD SELECTION:
 - pipeline_health and pipeline_value normally use Deal Funnel.
 - financial_summary, collections and execution_status normally use
   Work Order Tracker.
+- cross_board_analysis uses both Deal Funnel and Work Order Tracker.
 - If the user explicitly asks for a cross-board comparison or an
   overall business view, both boards may be relevant.
 
@@ -121,6 +122,7 @@ Set "needs_clarification" to true when the question is too ambiguous
 to determine the requested business information safely.
 
 Examples:
+
 "What about it?" with no useful previous context
 should require clarification.
 
@@ -131,7 +133,7 @@ financial execution, collections, or overall business performance.
 Return ONLY valid JSON in exactly this structure:
 
 {{
-    "intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | general",
+    "intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | cross_board_analysis | general",
     "sector": "exact sector from the provided lists or null",
     "boards": ["deal_funnel", "work_order_tracker"],
     "is_follow_up": true,
@@ -156,6 +158,7 @@ Return ONLY valid JSON in exactly this structure:
 
         try:
             plan = json.loads(raw_content)
+
         except json.JSONDecodeError as exc:
             raise ValueError(
                 f"Query planner returned invalid JSON: {raw_content}"
@@ -164,12 +167,14 @@ Return ONLY valid JSON in exactly this structure:
         # -----------------------------
         # Validate intent
         # -----------------------------
+
         valid_intents = {
             "pipeline_health",
             "pipeline_value",
             "financial_summary",
             "collections",
             "execution_status",
+            "cross_board_analysis",
             "general"
         }
 
@@ -179,23 +184,29 @@ Return ONLY valid JSON in exactly this structure:
         # -----------------------------
         # Validate sector
         # -----------------------------
-        all_sectors = set(deal_sectors + work_order_sectors)
+
+        all_sectors = set(
+            deal_sectors + work_order_sectors
+        )
 
         sector = plan.get("sector")
 
         if sector not in all_sectors:
+
             # If the model failed to identify a sector,
             # inherit the previous one only when available.
             previous_sector = previous_context.get("sector")
 
             if previous_sector in all_sectors:
                 plan["sector"] = previous_sector
+
             else:
                 plan["sector"] = None
 
         # -----------------------------
         # Validate boards
         # -----------------------------
+
         valid_boards = {
             "deal_funnel",
             "work_order_tracker"
@@ -207,25 +218,31 @@ Return ONLY valid JSON in exactly this structure:
             boards = []
 
         plan["boards"] = [
-            board for board in boards
+            board
+            for board in boards
             if board in valid_boards
         ]
 
         # If the model doesn't return a board,
         # infer the normal board from the intent.
         if not plan["boards"]:
+
             if plan["intent"] in {
                 "pipeline_health",
                 "pipeline_value"
             }:
-                plan["boards"] = ["deal_funnel"]
+                plan["boards"] = [
+                    "deal_funnel"
+                ]
 
             elif plan["intent"] in {
                 "financial_summary",
                 "collections",
                 "execution_status"
             }:
-                plan["boards"] = ["work_order_tracker"]
+                plan["boards"] = [
+                    "work_order_tracker"
+                ]
 
             else:
                 plan["boards"] = [
@@ -233,9 +250,17 @@ Return ONLY valid JSON in exactly this structure:
                     "work_order_tracker"
                 ]
 
+        # cross_board_analysis ALWAYS needs both boards.
+        if plan["intent"] == "cross_board_analysis":
+            plan["boards"] = [
+                "deal_funnel",
+                "work_order_tracker"
+            ]
+
         # -----------------------------
         # Follow-up flag
         # -----------------------------
+
         plan["is_follow_up"] = bool(
             plan.get("is_follow_up", False)
         )
@@ -243,6 +268,7 @@ Return ONLY valid JSON in exactly this structure:
         # -----------------------------
         # Clarification flag
         # -----------------------------
+
         plan["needs_clarification"] = bool(
             plan.get("needs_clarification", False)
         )

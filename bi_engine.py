@@ -6,17 +6,13 @@ class BIEngine:
     """
     Business Intelligence calculation layer.
 
-    Performs deterministic calculations on cleaned data.
-    Does not call the LLM and does not modify source DataFrames.
+    This class performs deterministic calculations on cleaned data.
+    It does not call the LLM and does not modify the source DataFrames.
     """
 
     def __init__(self, deals_df: pd.DataFrame, wo_df: pd.DataFrame):
         self.deals_df = deals_df
         self.wo_df = wo_df
-
-    # ==========================================================
-    # Generic helpers
-    # ==========================================================
 
     @staticmethod
     def _filter_by_sector(
@@ -24,7 +20,7 @@ class BIEngine:
         sector: str,
         column: str
     ) -> pd.DataFrame:
-        """Filter a DataFrame by sector without changing the original."""
+        """Filter a DataFrame by sector without changing the original data."""
 
         if not sector or column not in df.columns:
             return df.copy()
@@ -45,7 +41,12 @@ class BIEngine:
         numerator: float,
         denominator: float
     ):
-        """Return a safe percentage or None."""
+        """
+        Calculate a percentage safely.
+
+        Returns None when the denominator is zero,
+        missing, NaN or infinite.
+        """
 
         if numerator is None or denominator is None:
             return None
@@ -66,10 +67,14 @@ class BIEngine:
         return round((numerator / denominator) * 100, 2)
 
     @staticmethod
-    def _safe_distribution(series: pd.Series) -> dict:
+    def _safe_distribution(
+        series: pd.Series
+    ) -> dict:
         """
         Convert a pandas Series into a JSON-safe distribution.
-        Missing values become 'Unknown'.
+
+        Missing values are represented as 'Unknown'.
+        Counts are converted to normal Python integers.
         """
 
         if series is None:
@@ -102,7 +107,11 @@ class BIEngine:
 
     @staticmethod
     def _safe_number(value) -> float:
-        """Convert a value into a JSON-safe float."""
+        """
+        Convert a value into a JSON-safe float.
+
+        NaN and infinity become 0.0.
+        """
 
         try:
             value = float(value)
@@ -115,30 +124,18 @@ class BIEngine:
         except (TypeError, ValueError):
             return 0.0
 
-    @staticmethod
-    def _normalize_sector_series(series: pd.Series) -> pd.Series:
-        """
-        Normalize sector names for grouping while preserving
-        a readable 'Unknown' bucket.
-        """
-
-        return (
-            series
-            .fillna("Unknown")
-            .astype(str)
-            .str.strip()
-            .replace("", "Unknown")
-        )
-
-    # ==========================================================
-    # Existing pipeline analysis
-    # ==========================================================
+    # ==================================================
+    # EXISTING PIPELINE ANALYSIS
+    # ==================================================
 
     def get_pipeline_health(
         self,
         sector: str = None
     ) -> dict:
-        """Calculate sales pipeline metrics."""
+        """
+        Calculate sales pipeline metrics with explicit
+        data-quality caveats.
+        """
 
         df = self._filter_by_sector(
             self.deals_df,
@@ -173,17 +170,23 @@ class BIEngine:
             missing_value_count = total_deals
 
         if "Deal Stage" in df.columns:
+
             stage_distribution = self._safe_distribution(
                 df["Deal Stage"]
             )
+
         else:
+
             stage_distribution = {}
 
         if "Deal Status" in df.columns:
+
             status_distribution = self._safe_distribution(
                 df["Deal Status"]
             )
+
         else:
+
             status_distribution = {}
 
         won_deals = 0
@@ -210,17 +213,20 @@ class BIEngine:
         caveats = []
 
         if missing_value_count > 0:
+
             caveats.append(
                 f"{missing_value_count} out of {total_deals} "
                 "deals have missing deal values."
             )
 
         if "Deal Stage" not in df.columns:
+
             caveats.append(
                 "Deal Stage is unavailable in the source data."
             )
 
         if "Deal Status" not in df.columns:
+
             caveats.append(
                 "Deal Status is unavailable in the source data."
             )
@@ -238,15 +244,18 @@ class BIEngine:
             "data_caveats": caveats,
         }
 
-    # ==========================================================
-    # Existing financial / execution analysis
-    # ==========================================================
+    # ==================================================
+    # EXISTING FINANCIAL ANALYSIS
+    # ==================================================
 
     def get_financial_execution_summary(
         self,
         sector: str = None
     ) -> dict:
-        """Calculate contracted, billed, collected and outstanding."""
+        """
+        Calculate contracted, billed, collected and
+        outstanding values from Work Orders.
+        """
 
         df = self._filter_by_sector(
             self.wo_df,
@@ -278,13 +287,23 @@ class BIEngine:
                 errors="coerce"
             )
 
-            return self._safe_number(
-                numeric_values.sum(skipna=True)
+            total = numeric_values.sum(
+                skipna=True
             )
 
-        total_contracted = safe_sum(contract_col)
-        total_billed = safe_sum(billed_col)
-        total_collected = safe_sum(collected_col)
+            return self._safe_number(total)
+
+        total_contracted = safe_sum(
+            contract_col
+        )
+
+        total_billed = safe_sum(
+            billed_col
+        )
+
+        total_collected = safe_sum(
+            collected_col
+        )
 
         outstanding = self._safe_number(
             total_billed - total_collected
@@ -334,53 +353,56 @@ class BIEngine:
         )
 
         if "Execution Status" in df.columns:
+
             execution_statuses = self._safe_distribution(
                 df["Execution Status"]
             )
+
         else:
+
             execution_statuses = {}
 
         caveats = []
 
         if missing_contract > 0:
+
             caveats.append(
                 f"{missing_contract} work orders have missing "
                 "contracted amounts."
             )
 
         if missing_billed > 0:
+
             caveats.append(
                 f"{missing_billed} work orders have missing "
                 "billed amounts."
             )
 
         if missing_collected > 0:
+
             caveats.append(
                 f"{missing_collected} work orders have missing "
                 "collected amounts."
             )
 
         if contract_col not in df.columns:
+
             caveats.append(
                 "Contracted amount is unavailable "
                 "in the source data."
             )
 
         if billed_col not in df.columns:
+
             caveats.append(
                 "Billed amount is unavailable "
                 "in the source data."
             )
 
         if collected_col not in df.columns:
+
             caveats.append(
                 "Collected amount is unavailable "
-                "in the source data."
-            )
-
-        if "Execution Status" not in df.columns:
-            caveats.append(
-                "Execution Status is unavailable "
                 "in the source data."
             )
 
@@ -397,417 +419,160 @@ class BIEngine:
             "data_caveats": caveats,
         }
 
-    # ==========================================================
-    # NEW: Pipeline by sector
-    # ==========================================================
-
-    def get_pipeline_by_sector(self) -> dict:
-        """
-        Calculate pipeline metrics for every sector.
-
-        Used for sector comparison, ranking and opportunity analysis.
-        """
-
-        if "Sector/service" not in self.deals_df.columns:
-
-            return {
-                "sectors": {},
-                "ranking_by_deal_value": [],
-                "ranking_by_deal_count": [],
-                "data_caveats": [
-                    "Sector/service is unavailable in the source data."
-                ]
-            }
-
-        df = self.deals_df.copy()
-
-        df["_sector"] = self._normalize_sector_series(
-            df["Sector/service"]
-        )
-
-        value_col = "Masked Deal value"
-
-        if value_col in df.columns:
-            df["_deal_value"] = pd.to_numeric(
-                df[value_col],
-                errors="coerce"
-            )
-        else:
-            df["_deal_value"] = pd.NA
-
-        sectors = {}
-
-        for sector_name, group in df.groupby(
-            "_sector",
-            dropna=False
-        ):
-
-            values = group["_deal_value"]
-
-            sectors[str(sector_name)] = {
-                "total_deals": int(len(group)),
-                "total_recorded_deal_value_inr": self._safe_number(
-                    values.sum(skipna=True)
-                ),
-                "missing_deal_value_count": int(
-                    values.isna().sum()
-                ),
-                "won_deals": (
-                    int(
-                        group["Deal Status"]
-                        .fillna("")
-                        .astype(str)
-                        .str.strip()
-                        .str.casefold()
-                        .eq("won")
-                        .sum()
-                    )
-                    if "Deal Status" in group.columns
-                    else 0
-                ),
-                "lost_deals": (
-                    int(
-                        group["Deal Status"]
-                        .fillna("")
-                        .astype(str)
-                        .str.strip()
-                        .str.casefold()
-                        .eq("lost")
-                        .sum()
-                    )
-                    if "Deal Status" in group.columns
-                    else 0
-                ),
-                "stage_distribution": (
-                    self._safe_distribution(
-                        group["Deal Stage"]
-                    )
-                    if "Deal Stage" in group.columns
-                    else {}
-                ),
-                "status_distribution": (
-                    self._safe_distribution(
-                        group["Deal Status"]
-                    )
-                    if "Deal Status" in group.columns
-                    else {}
-                ),
-            }
-
-        ranking_by_deal_value = sorted(
-            sectors.items(),
-            key=lambda item: item[1][
-                "total_recorded_deal_value_inr"
-            ],
-            reverse=True
-        )
-
-        ranking_by_deal_count = sorted(
-            sectors.items(),
-            key=lambda item: item[1]["total_deals"],
-            reverse=True
-        )
-
-        return {
-            "sectors": sectors,
-            "ranking_by_deal_value": [
-                {
-                    "sector": sector,
-                    **metrics
-                }
-                for sector, metrics in ranking_by_deal_value
-            ],
-            "ranking_by_deal_count": [
-                {
-                    "sector": sector,
-                    **metrics
-                }
-                for sector, metrics in ranking_by_deal_count
-            ],
-            "data_caveats": [],
-        }
-
-    # ==========================================================
-    # NEW: Financial / execution by sector
-    # ==========================================================
-
-    def get_financial_by_sector(self) -> dict:
-        """
-        Calculate financial and execution metrics for every sector.
-        """
-
-        if "Sector" not in self.wo_df.columns:
-
-            return {
-                "sectors": {},
-                "ranking_by_contracted_value": [],
-                "ranking_by_collection_percentage": [],
-                "data_caveats": [
-                    "Sector is unavailable in the source data."
-                ]
-            }
-
-        df = self.wo_df.copy()
-
-        df["_sector"] = self._normalize_sector_series(
-            df["Sector"]
-        )
-
-        contract_col = (
-            "Amount in Rupees (Incl of GST) (Masked)"
-        )
-
-        billed_col = (
-            "Billed Value in Rupees (Incl of GST.) (Masked)"
-        )
-
-        collected_col = (
-            "Collected Amount in Rupees (Incl of GST.) (Masked)"
-        )
-
-        for col in [
-            contract_col,
-            billed_col,
-            collected_col
-        ]:
-
-            if col in df.columns:
-
-                df[f"_{col}"] = pd.to_numeric(
-                    df[col],
-                    errors="coerce"
-                )
-
-            else:
-
-                df[f"_{col}"] = pd.Series(
-                    pd.NA,
-                    index=df.index
-                )
-
-        sectors = {}
-
-        for sector_name, group in df.groupby(
-            "_sector",
-            dropna=False
-        ):
-
-            contracted = self._safe_number(
-                group[f"_{contract_col}"].sum(
-                    skipna=True
-                )
-            )
-
-            billed = self._safe_number(
-                group[f"_{billed_col}"].sum(
-                    skipna=True
-                )
-            )
-
-            collected = self._safe_number(
-                group[f"_{collected_col}"].sum(
-                    skipna=True
-                )
-            )
-
-            outstanding = self._safe_number(
-                billed - collected
-            )
-
-            sectors[str(sector_name)] = {
-                "total_work_orders": int(len(group)),
-                "total_contracted_value_inr": contracted,
-                "total_billed_value_inr": billed,
-                "total_collected_value_inr": collected,
-                "outstanding_billed_value_inr": outstanding,
-                "billing_percentage": self._safe_percentage(
-                    billed,
-                    contracted
-                ),
-                "collection_percentage": self._safe_percentage(
-                    collected,
-                    billed
-                ),
-                "execution_statuses": (
-                    self._safe_distribution(
-                        group["Execution Status"]
-                    )
-                    if "Execution Status" in group.columns
-                    else {}
-                ),
-                "missing_contract_count": int(
-                    group[f"_{contract_col}"].isna().sum()
-                ),
-                "missing_billed_count": int(
-                    group[f"_{billed_col}"].isna().sum()
-                ),
-                "missing_collected_count": int(
-                    group[f"_{collected_col}"].isna().sum()
-                ),
-            }
-
-        ranking_by_contracted = sorted(
-            sectors.items(),
-            key=lambda item: item[1][
-                "total_contracted_value_inr"
-            ],
-            reverse=True
-        )
-
-        collection_candidates = [
-            item
-            for item in sectors.items()
-            if item[1]["collection_percentage"] is not None
-        ]
-
-        ranking_by_collection = sorted(
-            collection_candidates,
-            key=lambda item: item[1][
-                "collection_percentage"
-            ],
-            reverse=True
-        )
-
-        return {
-            "sectors": sectors,
-            "ranking_by_contracted_value": [
-                {
-                    "sector": sector,
-                    **metrics
-                }
-                for sector, metrics in ranking_by_contracted
-            ],
-            "ranking_by_collection_percentage": [
-                {
-                    "sector": sector,
-                    **metrics
-                }
-                for sector, metrics in ranking_by_collection
-            ],
-            "data_caveats": [],
-        }
-
-    # ==========================================================
-    # NEW: Cross-board sector analysis
-    # ==========================================================
+    # ==================================================
+    # NEW: CROSS-BOARD SECTOR ANALYSIS
+    # ==================================================
 
     def get_cross_board_sector_analysis(self) -> dict:
         """
-        Combine Deal Funnel and Work Order metrics by sector.
+        Compare Deal Funnel and Work Order Tracker
+        metrics independently for every sector.
 
-        This is the evidence layer for:
-        - sector comparison
-        - pipeline vs execution
-        - collection risk
-        - opportunity identification
+        This method does NOT assume that a deal corresponds
+        to a work order.
+
+        It only compares aggregated sector-level metrics.
         """
 
-        pipeline = self.get_pipeline_by_sector()
-        financial = self.get_financial_by_sector()
+        deal_sector_column = "Sector/service"
+        work_order_sector_column = "Sector"
 
-        pipeline_sectors = pipeline.get(
-            "sectors",
-            {}
-        )
+        deal_sectors = set()
 
-        financial_sectors = financial.get(
-            "sectors",
-            {}
-        )
+        if deal_sector_column in self.deals_df.columns:
+
+            deal_sectors = set(
+                self.deals_df[deal_sector_column]
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .replace("", pd.NA)
+                .dropna()
+                .unique()
+                .tolist()
+            )
+
+        work_order_sectors = set()
+
+        if work_order_sector_column in self.wo_df.columns:
+
+            work_order_sectors = set(
+                self.wo_df[work_order_sector_column]
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .replace("", pd.NA)
+                .dropna()
+                .unique()
+                .tolist()
+            )
 
         all_sectors = sorted(
-            set(pipeline_sectors.keys())
-            |
-            set(financial_sectors.keys())
+            deal_sectors.union(work_order_sectors),
+            key=lambda value: value.casefold()
         )
 
-        combined = {}
+        sector_analysis = []
 
         for sector in all_sectors:
 
-            pipeline_data = pipeline_sectors.get(
-                sector,
-                {}
+            pipeline = self.get_pipeline_health(
+                sector=sector
             )
 
-            financial_data = financial_sectors.get(
-                sector,
-                {}
+            financial = self.get_financial_execution_summary(
+                sector=sector
             )
 
-            pipeline_value = self._safe_number(
-                pipeline_data.get(
-                    "total_recorded_deal_value_inr",
-                    0
-                )
-            )
+            sector_analysis.append(
+                {
+                    "sector": sector,
 
-            contracted_value = self._safe_number(
-                financial_data.get(
-                    "total_contracted_value_inr",
-                    0
-                )
-            )
+                    "pipeline": {
+                        "total_deals": pipeline[
+                            "total_deals"
+                        ],
+                        "recorded_deal_value_inr": pipeline[
+                            "total_recorded_deal_value_inr"
+                        ],
+                        "won_deals": pipeline[
+                            "won_deals"
+                        ],
+                        "lost_deals": pipeline[
+                            "lost_deals"
+                        ],
+                        "status_distribution": pipeline[
+                            "status_distribution"
+                        ],
+                        "stage_distribution": pipeline[
+                            "stage_distribution"
+                        ],
+                    },
 
-            billed_value = self._safe_number(
-                financial_data.get(
-                    "total_billed_value_inr",
-                    0
-                )
-            )
+                    "work_orders": {
+                        "total_work_orders": financial[
+                            "total_work_orders"
+                        ],
+                        "contracted_value_inr": financial[
+                            "total_contracted_value_inr"
+                        ],
+                        "billed_value_inr": financial[
+                            "total_billed_value_inr"
+                        ],
+                        "collected_value_inr": financial[
+                            "total_collected_value_inr"
+                        ],
+                        "outstanding_billed_value_inr": financial[
+                            "outstanding_billed_value_inr"
+                        ],
+                        "billing_percentage": financial[
+                            "billing_percentage"
+                        ],
+                        "collection_percentage": financial[
+                            "collection_percentage"
+                        ],
+                        "execution_statuses": financial[
+                            "execution_statuses"
+                        ],
+                    },
 
-            collected_value = self._safe_number(
-                financial_data.get(
-                    "total_collected_value_inr",
-                    0
-                )
-            )
-
-            combined[sector] = {
-                "pipeline": pipeline_data,
-                "work_orders": financial_data,
-
-                # Explicit cross-board indicators.
-                "pipeline_to_contracted_value_ratio": (
-                    self._safe_percentage(
-                        contracted_value,
-                        pipeline_value
+                    "data_caveats": (
+                        pipeline["data_caveats"]
+                        + financial["data_caveats"]
                     )
-                ),
+                }
+            )
 
-                "pipeline_value_inr": pipeline_value,
+        # --------------------------------------------------
+        # Sectors that exist on only one board
+        # --------------------------------------------------
 
-                "contracted_value_inr": contracted_value,
+        only_in_deals = sorted(
+            deal_sectors - work_order_sectors,
+            key=lambda value: value.casefold()
+        )
 
-                "billed_value_inr": billed_value,
-
-                "collected_value_inr": collected_value,
-
-                "outstanding_billed_value_inr": (
-                    self._safe_number(
-                        billed_value - collected_value
-                    )
-                ),
-
-                "collection_percentage": (
-                    financial_data.get(
-                        "collection_percentage"
-                    )
-                ),
-
-                "billing_percentage": (
-                    financial_data.get(
-                        "billing_percentage"
-                    )
-                ),
-            }
+        only_in_work_orders = sorted(
+            work_order_sectors - deal_sectors,
+            key=lambda value: value.casefold()
+        )
 
         return {
-            "sectors": combined,
-            "sector_count": len(combined),
-            "data_caveats": (
-                pipeline.get("data_caveats", [])
-                +
-                financial.get("data_caveats", [])
+            "comparison_type": (
+                "Independent sector-level comparison. "
+                "No deal-to-work-order mapping is assumed."
             ),
+            "sector_count": len(all_sectors),
+            "sectors": sector_analysis,
+            "sectors_only_in_deal_funnel": only_in_deals,
+            "sectors_only_in_work_order_tracker": (
+                only_in_work_orders
+            ),
+            "data_caveats": [
+                "Pipeline and work-order records are aggregated "
+                "by sector independently.",
+                "A deal cannot be assumed to correspond to a "
+                "specific work order unless an explicit mapping "
+                "exists in the source data."
+            ]
         }
