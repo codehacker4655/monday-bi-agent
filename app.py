@@ -14,7 +14,7 @@ st.caption("Cross-board intelligence across Sales Pipeline and Work Order Execut
 
 BACKEND_URL = st.sidebar.text_input(
     "Backend Endpoint",
-    value="http://localhost:8000/api/chat"
+    value="https://monday-bi-agent-j04a.onrender.com/api/chat"
 )
 
 # --------------------------------------------------
