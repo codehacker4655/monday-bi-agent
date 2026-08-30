@@ -212,9 +212,7 @@ async def process_bi_query(request: QueryRequest):
         elif intent == "cross_board_analysis":
 
             cross_board_summary = (
-                bi.get_cross_board_analysis(
-                    sector=sector_target
-                )
+                bi.get_cross_board_sector_analysis()
             )
 
         # --------------------------------------------------
