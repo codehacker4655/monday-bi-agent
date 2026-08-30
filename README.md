@@ -2,20 +2,18 @@
 
 > **Ask business questions in plain English. Get executive-ready insights from live Monday.com data.**
 
----
-
 ## 🎯 What is this?
 
 **Founder BI Agent** is a Business Intelligence agent that connects to live **Monday.com** boards and converts natural-language business questions into verified, data-driven answers.
 
 It combines:
 
-- 🧠 **LLM-powered query understanding**
-- 📊 **Deterministic BI calculations**
-- 🔗 **Monday.com GraphQL API**
-- 💬 **Streamlit chat interface**
-- ⚡ **FastAPI backend**
-- 🛡️ **Data-quality and missing-value handling**
+- 🧠 LLM-powered query understanding
+- 📊 Deterministic BI calculations
+- 🔗 Monday.com GraphQL API
+- 💬 Streamlit chat interface
+- ⚡ FastAPI backend
+- 🛡️ Data-quality and missing-value handling
 
 ---
 
@@ -40,24 +38,58 @@ It combines:
 
 ```mermaid
 flowchart LR
-    A[👤 User] --> B[💬 Streamlit UI]
-    B --> C[⚡ FastAPI API]
+    A[User] --> B[Streamlit UI]
+    B --> C[FastAPI Backend]
 
-    C --> D[🔗 Monday.com Client]
-    D --> E[(📊 Deal Funnel)]
-    D --> F[(🏗️ Work Order Tracker)]
+    C --> D[Monday.com Client]
+    D --> E[Deal Funnel Board]
+    D --> F[Work Order Tracker Board]
 
-    E --> G[🧹 Data Cleaning]
+    E --> G[Data Cleaning]
     F --> G
 
-    G --> H[🧠 Query Planner]
-    H --> I[📊 BI Engine]
+    G --> H[Query Planner]
+    H --> I[BI Engine]
 
-    I --> J[✅ Verified Metrics]
-    J --> K[🤖 Groq LLM]
+    I --> J[Verified BI Metrics]
+    J --> K[Groq LLM]
 
-    K --> L[💡 Executive Answer]
+    K --> L[Executive Answer]
     L --> B
+
+Architecture Flow
+
+1. User → Streamlit
+
+The user asks a business question through the Streamlit chat interface.
+
+2. Streamlit → FastAPI
+
+The frontend sends the question to the FastAPI backend.
+
+3. FastAPI → Monday.com
+
+The backend fetches live data from the Deal Funnel and Work Order Tracker boards.
+
+4. Data Cleaning
+
+Raw Monday.com data is cleaned and normalized before analysis.
+
+5. Query Planner
+
+The LLM identifies the user's intent, relevant sector, and required board(s).
+
+6. BI Engine
+
+The BI Engine performs deterministic business calculations using Pandas.
+
+7. Verified Metrics → LLM
+
+Only the calculated and verified metrics are passed to the LLM.
+
+8. Executive Answer
+
+The LLM converts the verified metrics into a concise, business-focused response.
 
 
 ---
@@ -65,19 +97,19 @@ flowchart LR
 🔄 How It Works
 
 <details>
-<summary><b>1️⃣ User asks a question</b></summary>The user enters a natural-language business question through the Streamlit chat interface.
+<summary><b>1️⃣ Ask a business question</b></summary>The user enters a natural-language question through the Streamlit interface.
 
 Example:
 
-> "How is our pipeline looking for Renewable Energy?"
+> How is our pipeline looking for Renewable Energy?
 
 
 
 </details><details>
-<summary><b>2️⃣ Live data is fetched</b></summary>The backend connects to Monday.com through its GraphQL API and retrieves the required board data.
+<summary><b>2️⃣ Fetch live Monday.com data</b></summary>The FastAPI backend connects to Monday.com through the GraphQL API and retrieves the required board data.
 
 </details><details>
-<summary><b>3️⃣ Data is cleaned</b></summary>Raw Monday.com data is normalized before calculations.
+<summary><b>3️⃣ Clean and normalize the data</b></summary>The raw board data is cleaned before analysis.
 
 This includes handling:
 
@@ -95,9 +127,9 @@ Sector names
 
 
 </details><details>
-<summary><b>4️⃣ Query Planner understands the question</b></summary>The LLM determines the user's:
+<summary><b>4️⃣ Understand the question</b></summary>The Query Planner uses the LLM to identify:
 
-Intent
+User intent
 
 Relevant sector
 
@@ -107,14 +139,14 @@ Whether clarification is required
 
 
 </details><details>
-<summary><b>5️⃣ BI Engine calculates the metrics</b></summary>The BI Engine performs deterministic calculations using Pandas.
+<summary><b>5️⃣ Calculate verified metrics</b></summary>The BI Engine performs deterministic calculations using Pandas.
 
 The LLM does not calculate the business metrics.
 
 </details><details>
-<summary><b>6️⃣ LLM generates the explanation</b></summary>The verified metrics are passed to the LLM, which converts them into a concise executive-style response.
+<summary><b>6️⃣ Generate the answer</b></summary>The verified metrics are passed to the LLM, which generates a concise executive-style response.
 
-The LLM is instructed to:
+The system instructs the LLM to:
 
 Never invent numbers
 
@@ -122,7 +154,7 @@ Use only verified metrics
 
 Distinguish missing data from zero
 
-Mention important data-quality caveats
+Mention relevant data-quality caveats
 
 
 </details>
