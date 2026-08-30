@@ -28,6 +28,31 @@ if "messages" not in st.session_state:
 
 
 # --------------------------------------------------
+# Download conversation as Markdown
+# --------------------------------------------------
+if st.session_state.messages:
+
+    markdown_chat = "# Monday BI Agent Conversation\n\n"
+
+    for message in st.session_state.messages:
+
+        if message["role"] == "user":
+            role = "User"
+        else:
+            role = "Assistant"
+
+        markdown_chat += f"## {role}\n\n"
+        markdown_chat += f"{message['content']}\n\n"
+
+    st.sidebar.download_button(
+        label="📥 Download Chat as Markdown",
+        data=markdown_chat,
+        file_name="monday_bi_conversation.md",
+        mime="text/markdown"
+    )
+
+
+# --------------------------------------------------
 # Render chat history
 # --------------------------------------------------
 for message in st.session_state.messages:
