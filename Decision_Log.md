@@ -87,11 +87,11 @@ New monday.com boards can auto-seed with placeholder items not present in the so
 
 ## 4. "Leadership Update" Feature — Interpretation
 
-`[TODO: confirm final interpretation and implementation status before submitting]`
+**Not implemented in this prototype.**
 
-The brief leaves this open-ended. My interpretation: **`[e.g. "a leadership update is a founder-facing digest that surfaces the 3–5 things a leadership team would want to know without asking" — describe what was actually built: a summarization endpoint? a specific query pattern? Fill in based on what's implemented.]`**
+The brief calls this optional and left it open to interpretation. Given the 6-hour timebox, I prioritized the four required capabilities — live monday.com integration, data resilience, query understanding, and cross-board BI reasoning — over this optional extension, since a shaky version of all four would have been a weaker submission than a solid version of four plus a rushed fifth.
 
-If not implemented in the current prototype, state that explicitly here rather than leaving it ambiguous — a documented decision not to build something is still a decision.
+**If I were to build it**, my interpretation would be: a leadership update is a founder-facing digest that proactively surfaces the 3–5 things a leadership team would want to know without having to ask — e.g. sectors with the largest outstanding receivables, deals stalled at a funnel stage longer than typical, and any sector where pipeline value is strong but billing is lagging. This would reuse the existing `BIEngine` metrics (no new computation layer needed) behind a single `/api/leadership-update` endpoint that runs a fixed set of the highest-signal queries and composes them into one narrative, rather than requiring the user to ask each question individually.
 
 ---
 
