@@ -54,7 +54,7 @@ The brief explicitly requires querying monday.com dynamically rather than workin
 
 ## Live Demo
 
-🔗 **[TODO: paste hosted prototype URL here]**
+🔗 https://monday-bi-agent-v6hs6xspnyzpkr2po2fwlu.streamlit.app/
 
 No local setup required to try it — see the [Example Queries](#example-queries) section for what to ask.
 
