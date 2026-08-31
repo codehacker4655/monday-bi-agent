@@ -264,10 +264,10 @@ Deals and Work Orders are **separate boards with no explicit linking field**. Th
 |---|---|---|
 | Backend | FastAPI | Async, fast to iterate on in a 6-hour window |
 | Data source | monday.com GraphQL API | Live data, per assignment requirement |
-| LLM (planning) | Groq — `[TODO: model name]` | Fast inference for query intent extraction |
+| LLM (planning) | Groq — `gpt-oss-120b` | Fast inference for query intent extraction |
 | LLM (narration) | Groq — `gpt-oss-120b` | Turns verified metrics into founder-readable prose |
 | Data processing | pandas | Cleaning + aggregation |
-| Hosting | `[TODO: e.g. Render / Railway / Fly.io]` | |
+| Hosting | `Frontend-Streamlit && Backend-Render` | |
 
 ---
 
