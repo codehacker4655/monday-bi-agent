@@ -133,7 +133,7 @@ financial execution, collections, or overall business performance.
 Return ONLY valid JSON in exactly this structure:
 
 {{
-    "intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | cross_board_analysis | general",
+    "intent": ""intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | cross_board_analysis | general",",
     "sector": "exact sector from the provided lists or null",
     "boards": ["deal_funnel", "work_order_tracker"],
     "is_follow_up": true,

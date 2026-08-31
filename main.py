@@ -225,7 +225,9 @@ async def process_bi_query(request: QueryRequest):
             )
 
             financial_summary = (
-                bi.get_financial_execution_summary()
+                bi.get_financial_execution_summary(
+                    sector=sector_target
+                )
             )
 
         # --------------------------------------------------
@@ -330,6 +332,34 @@ IMPORTANT RULES:
 
 21. Never repeat a statement that conflicts with a number shown in the
     verified metrics.
+
+22. Separate your reasoning into three levels when useful:
+
+    FACT:
+    State only what the verified metrics directly show.
+
+    INSIGHT:
+    Explain the meaningful pattern supported by those metrics.
+
+    DECISION SUPPORT:
+    Suggest what leadership may want to investigate or prioritize.
+    Do not present the recommendation as a guaranteed outcome.
+
+23. Every insight must be traceable to one or more values
+    in the verified metrics.
+
+24. Do not manufacture trends, correlations, causation,
+    conversion rates, or business relationships that are
+    not explicitly represented in the verified data.
+
+25. When the question asks "why", distinguish between:
+    - what the data proves
+    - what the data may indicate
+    - what requires further investigation.
+
+26. When the available data is insufficient to answer the
+    question confidently, explicitly say that the available
+    data is insufficient rather than guessing.
     
 """
 
