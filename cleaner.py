@@ -15,25 +15,49 @@ def drop_duplicate_header_rows(
     min_matches: int = 2
 ) -> pd.DataFrame:
     """
-    Remove rows that are accidental re-imported header rows, i.e. rows
-    where a cell's value equals its own column name.
+    Remove rows that are accidental re-imported header rows.
 
-    Checks every column instead of just one, so it still catches the
-    row even if a future re-import doesn't duplicate every column
-    identically (min_matches lets you require the header text to
-    reappear in at least N columns before treating it as a real
-    duplicate-header row, rather than a coincidental single match).
+    A row is considered a duplicate header row when at least
+    `min_matches` cells contain text equal to their own column name.
+
+    Uses NumPy integer arrays for the match counter so that
+    PyArrow boolean dtypes cannot cause arithmetic dtype errors.
     """
     if df.empty:
         return df.copy()
 
-    match_counts = pd.Series(0, index=df.index)
+    # Use a normal NumPy integer array for counting matches.
+    # This avoids int64 + bool[pyarrow] incompatibility.
+    match_counts = np.zeros(
+        len(df),
+        dtype=np.int64
+    )
+
     for col in df.columns:
-        match_counts += (
-            df[col].astype("string").str.strip() == col
+
+        matches = (
+            df[col]
+            .astype("string")
+            .str.strip()
+            == col
         ).fillna(False)
 
-    return df[match_counts < min_matches].copy()
+        # Convert PyArrow boolean values to normal NumPy integers
+        # before adding them to the counter.
+        match_counts += matches.to_numpy(
+            dtype=np.int64
+        )
+
+    # Convert the NumPy counts back to a Series using
+    # the original DataFrame index.
+    match_counts = pd.Series(
+        match_counts,
+        index=df.index
+    )
+
+    return df[
+        match_counts < min_matches
+    ].copy()
 
 
 def normalize_sector_column(
