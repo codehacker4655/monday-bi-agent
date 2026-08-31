@@ -1,260 +1,309 @@
-# Founder BI Agent — Monday.com Integration
+# monday-bi-agent
 
-> Ask business questions in plain English and get executive-ready insights from live Monday.com data.
+> A conversational BI agent that answers founder-level business questions by querying **live data from monday.com** — no hardcoded CSVs, no stale snapshots.
 
-**Live demo:** [monday-bi-agent-v6hs6xspnyzpkr2po2fwlu.streamlit.app](https://monday-bi-agent-v6hs6xspnyzpkr2po2fwlu.streamlit.app/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](https://fastapi.tiangolo.com/)
+[![LLM](https://img.shields.io/badge/LLM-Groq-orange)](https://groq.com/)
+[![Status](https://img.shields.io/badge/status-prototype-yellow)]()
 
-## What Is This?
+Built for the Skylark Drones Full-Stack Assignment.
 
-Founder BI Agent is a Business Intelligence agent that connects to live Monday.com boards and answers natural-language business questions with verified, deterministic metrics — not LLM guesses.
+---
 
-It combines:
+## Table of Contents
 
-- **LLM-powered query understanding** (LangChain + Groq)
-- **Deterministic BI calculations** (pandas)
-- **Live data** via the Monday.com GraphQL API
-- **FastAPI** backend
-- **Streamlit** chat frontend
-- **Data cleaning & normalization**
-- **Explicit missing-value / data-quality handling**
+- [What this does](#what-this-does)
+- [Live Demo](#live-demo)
+- [Architecture](#architecture)
+- [The Data](#the-data)
+- [Setup](#setup)
+- [monday.com Board Setup (important)](#mondaycom-board-setup-important)
+- [API Usage](#api-usage)
+- [Example Queries](#example-queries)
+- [Data Quality Handling](#data-quality-handling)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Known Limitations](#known-limitations)
+- [Roadmap](#roadmap)
+- [License](#license)
 
-## Core Capabilities
+---
 
-- Fetches live data from Monday.com boards
-- Works with a Deal Funnel (sales pipeline) board and a Work Order Tracker board
-- Cleans and normalizes text, numeric, monetary, and date fields
-- Dynamically discovers available sectors from the data (no hard-coded sector list)
-- Understands natural-language business questions and classifies intent + sector
-- Supports pipeline / deal-value questions
-- Supports financial, billing, and collections questions
-- Supports work-order execution-status questions
-- Supports cross-board (pipeline vs. execution) analysis
-- Maintains lightweight per-session conversation context for follow-up questions
-- Calculates all BI metrics deterministically with pandas — the LLM never invents numbers
-- Surfaces missing/unavailable data explicitly instead of treating it as zero
-- Generates concise, executive-style natural-language answers
+## What this does
+
+Founders don't want to click through boards to find answers — they want to ask *"how's the Mining sector doing"* and get a real answer. This agent:
+
+- Connects live to two monday.com boards (**Deals** and **Work Orders**) via the GraphQL API
+- Cleans messy real-world data on every fetch (nulls, inconsistent naming, embedded junk rows)
+- Interprets loose, founder-style natural-language questions
+- Asks a clarifying question when a query is genuinely ambiguous, instead of guessing
+- Computes verified metrics in code (never lets the LLM invent numbers) and then narrates them with context and caveats
+
+<details>
+<summary><strong>Why "live data" matters (click to expand)</strong></summary>
+
+The brief explicitly requires querying monday.com dynamically rather than working off a static export. This means:
+- Board edits (renamed columns, deleted items, status changes) are reflected on the very next query
+- No sync/ETL step to keep in sync
+- The trade-off: every query pays the cost of a fresh API fetch — see [Known Limitations](#known-limitations)
+
+</details>
+
+---
+
+## Live Demo
+
+🔗 **[TODO: paste hosted prototype URL here]**
+
+No local setup required to try it — see the [Example Queries](#example-queries) section for what to ask.
+
+---
 
 ## Architecture
 
-```
-User
-  → Streamlit Chat Interface
-  → FastAPI Backend (main.py)
-  → Monday.com Client (GraphQL)
-  → Data Cleaning
-  → Query Planner (LLM)
-  → BI Engine (pandas, deterministic)
-  → LLM Response Layer (explanation only)
-  → User
+```mermaid
+flowchart TD
+    A[User question] --> B[FastAPI /api/chat]
+    B --> C[QueryPlanner - Groq]
+    C -->|ambiguous| D[Return clarifying question]
+    C -->|clear intent + sector| E[MondayClient]
+    E -->|GraphQL, cursor pagination| F[(monday.com API)]
+    F --> E
+    E --> G[cleaner.py]
+    G -->|normalized DataFrame| H[BIEngine]
+    H -->|verified metrics, JSON| I[LLM narrator - Groq]
+    I --> J[Structured answer:
+    Fact / Insight / Decision Support]
+    J --> K[User]
 ```
 
-### Components
+**Design principle: separation of computation and narration.** `BIEngine` computes every number in plain pandas — sums, percentages, groupings — and returns structured JSON. The LLM's job is *only* to explain that JSON in natural language, under a system prompt that explicitly forbids inventing figures or assuming relationships (like deal→work-order mapping) that aren't in the data. This is the single biggest anti-hallucination decision in the project — see the [Decision Log](./DECISION_LOG.md) for why.
 
-| Component | File | Responsibility |
+---
+
+## The Data
+
+Two monday.com boards, seeded from the provided Excel files:
+
+<details open>
+<summary><strong>📋 Deals board</strong> (from <code>Deal_funnel_Data.xlsx</code>)</summary>
+
+| Column | Type | Notes |
 |---|---|---|
-| **Streamlit UI** | `app.py` | Chat interface. Sends questions + a session ID to the backend and renders the answer, including any data-quality warnings. |
-| **FastAPI Backend** | `main.py` | Exposes `POST /api/chat`; orchestrates the full pipeline for each request. |
-| **Monday.com Client** | `Monday_client.py` | Talks to the Monday.com GraphQL API and returns board data as pandas DataFrames. |
-| **Data Cleaning** | `cleaner.py` | Cleans and normalizes text, numeric, monetary, and date fields before analysis. |
-| **Query Planner** | `query_planner.py` | Uses an LLM to determine intent, relevant sector/board(s), and whether the question needs clarification. |
-| **BI Engine** | `bi_engine.py` | Performs all deterministic pandas calculations. The single source of truth for every number in a response. |
-| **LLM Response Layer** | (in `main.py`) | Takes the BI Engine's verified metrics and converts them into an executive-style explanation. It is explicitly instructed never to invent or infer numbers. |
+| Item (Deal name) | Text | Masked/codenamed |
+| Deal Status | Status | Won / Dead / Open / On Hold |
+| Owner code | Text | `OWNER_00X` |
+| Client Code | Text | `COMPANYXXX` |
+| Sector/service | Status/Dropdown | 11 valid sectors |
+| Closure Probability | Number | |
+| Masked Deal value | Number | ~52% of rows have this missing |
+| Deal Stage | Status | Funnel stage, e.g. "B. Sales Qualified Leads" → "H. Work Order Received" |
+| Created Date | Date | |
+| Tentative Close Date | Date | |
+| Close Date (A) | Date | Mostly empty — most deals still open |
 
-**Design rule:** the LLM understands questions and explains results — it never calculates business metrics itself. Every number in a response comes from the BI Engine.
+**344 clean rows** after removing 2 embedded duplicate-header rows (a raw-data artifact, not real deals).
 
-## How It Works
+</details>
 
-1. **User asks a question** — e.g. *"What is the pipeline looking like for renewable energy?"*
-2. **Live data is fetched** from the configured Monday.com boards.
-3. **Data is cleaned** and normalized so calculations are reliable.
-4. **Available sectors are discovered** directly from the live data (not hard-coded).
-5. **The query is understood** — the Query Planner determines intent, target sector, and relevant board(s).
-6. **BI calculations run** deterministically in pandas.
-7. **Data-quality issues are surfaced** — missing values and unavailable fields are reported rather than silently treated as zero.
-8. **The final answer is generated** — verified metrics are handed to the LLM, which returns a concise, executive-style explanation.
+<details>
+<summary><strong>🛠️ Work Orders board</strong> (from <code>Work_Order_Tracker_Data.xlsx</code>)</summary>
 
-## BI Metrics Supported
+| Column | Type | Notes |
+|---|---|---|
+| Item (Deal name masked) | Text | |
+| Customer Name Code | Text | `WOCOMPANY_00X` |
+| Sector | Status/Dropdown | 6 of the 11 sectors appear here |
+| Nature/Type of Work | Text | |
+| Execution Status | Status | Ongoing / Completed / Not Started / etc. |
+| Amount in Rupees (Contracted) | Number | Masked |
+| Billed Value in Rupees | Number | Masked |
+| Collected Amount in Rupees | Number | Masked |
+| WO / Invoice / Collection / Billing Status | Status | Several parallel status fields |
+| Date of PO/LOI, Data Delivery Date, Collection Date | Date | Frequently empty |
 
-- Total deals, recorded deal value
-- Won / lost deals
-- Pipeline stage distribution
-- Deal status distribution
-- Total work orders
-- Contracted value, billed value, collected value
-- Outstanding billed value
-- Billing percentage, collection percentage
-- Execution status distribution
-- Cross-board sector analysis (pipeline vs. work-order execution)
+**176 rows.**
 
-## Example Questions
+</details>
 
-- What is our pipeline looking like?
-- What is the pipeline value for renewable energy?
-- How many deals have we won / lost?
-- What is our total contracted value?
-- How much have we billed? How much have we collected?
-- What is the outstanding billed amount?
-- What is our billing percentage / collection percentage?
-- What is the execution status of our work orders?
-- How is the pipeline looking for a particular sector?
+---
 
-## Data Quality
+## Setup
 
-Data quality is treated as a first-class concern. The system never assumes missing data means zero.
+```bash
+git clone https://github.com/codehacker4655/monday-bi-agent.git
+cd monday-bi-agent
+pip install -r requirements.txt
+```
 
-- Missing deal, contracted, billed, or collected values are explicitly reported
-- Missing business fields are identified
-- Percentages are not calculated when their denominator is unavailable or zero
-- The LLM is instructed to state when a metric is unavailable rather than fill the gap
+Create a `.env` file:
 
-This prevents misleading business conclusions from incomplete data.
+```env
+MONDAY_API_KEY=your_monday_api_token
+GROQ_API_KEY=your_groq_api_key
+DEALS_BOARD_ID=your_deals_board_id
+WORK_ORDERS_BOARD_ID=your_work_orders_board_id
+```
 
-## Technology Stack
+Run it:
 
-| Layer | Technology |
-|---|---|
-| Backend | Python, FastAPI, Pydantic |
-| Data processing | pandas, numpy, openpyxl |
-| LLM orchestration | LangChain, langchain-groq |
-| LLM | Groq — `openai/gpt-oss-120b` |
-| Data source | Monday.com GraphQL API |
-| Frontend | Streamlit |
-| Deployment | Streamlit Community Cloud (frontend) + Render (FastAPI backend) |
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+<details>
+<summary>Where to find your monday.com API key and board IDs</summary>
+
+- **API key:** monday.com → Avatar (bottom left) → Developers → My Access Tokens
+- **Board ID:** open the board → it's the number in the URL, `https://<your-org>.monday.com/boards/<BOARD_ID>`
+
+</details>
+
+---
+
+## monday.com Board Setup (important)
+
+⚠️ **Column titles matter.** This agent matches monday.com column titles against expected names (e.g. `"Deal Status"`, `"Execution Status"`). When importing the provided Excel files, **monday.com's import wizard can silently rename columns to generic defaults** (`Status`, `Date`) if you don't confirm names explicitly at the mapping step.
+
+**Steps:**
+
+1. Create a new board for each Excel file, using monday's "Import from Excel" option.
+2. During the column-mapping step, **verify every column title matches the source spreadsheet exactly** — don't accept generic defaults.
+3. After import, spot-check for **duplicate header rows** (rows where a status column literally contains the text `"Deal Status"` or `"Execution Status"` instead of a real value) and **stray placeholder items** monday sometimes seeds new boards with. Delete these.
+4. Confirm your item counts: **344** on the Deals board, **176** on the Work Orders board.
+
+See [`DECISION_LOG.md`](./DECISION_LOG.md) for the full story of how this was diagnosed — it's a good example of the data-resilience problem the assignment is testing for.
+
+---
+
+## API Usage
+
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "How is the Mining sector performing?",
+    "session_id": "demo-session-1"
+  }'
+```
+
+<details>
+<summary>Example response shape</summary>
+
+```json
+{
+  "response": "**Fact**\n- Mining has 106 deals in the pipeline...\n\n**Insight**\n...\n\n**Decision Support**\n...",
+  "clarification_needed": false,
+  "session_id": "demo-session-1"
+}
+```
+
+</details>
+
+`session_id` lets the agent maintain conversational context (e.g. resolving "what about last quarter" as a follow-up) — see [Known Limitations](#known-limitations) for how this is currently stored.
+
+---
+
+## Example Queries
+
+<details open>
+<summary><strong>Try these</strong></summary>
+
+- "How many deals have we won?"
+- "What's our collection percentage?"
+- "Which sector has the largest outstanding billed value?"
+- "What's the pipeline value for Mining?"
+- "What sectors have work orders but aren't in the pipeline?"
+- "What's the execution status of work orders for Powerline?"
+- "What's the pipeline value for Aerospace?" *(tests graceful handling of an invalid sector)*
+
+</details>
+
+---
+
+## Data Quality Handling
+
+The source data is intentionally messy. Rather than fail or silently guess, the agent is designed to surface data-quality issues to the user as part of its answer.
+
+<details>
+<summary><strong>Missing values</strong></summary>
+
+~52% of deals have no recorded value. Any pipeline-value answer explicitly states how many deals were excluded from the sum, so a founder never mistakes "the visible total" for "the true total."
+</details>
+
+<details>
+<summary><strong>Inconsistent status text (casing/whitespace)</strong></summary>
+
+Status fields are normalized (trimmed, case-folded) before grouping, so `"Won"`, `"won "`, and `"WON"` are treated as the same bucket instead of silently fragmenting counts.
+</details>
+
+<details>
+<summary><strong>Embedded duplicate header rows</strong></summary>
+
+Two rows in the raw Deals data contain the literal text `"Deal Status"` where a real status value should be — a spreadsheet artifact. These are detected and dropped during cleaning rather than counted as deals with an unknown status.
+</details>
+
+<details>
+<summary><strong>Sector validation</strong></summary>
+
+Sector names typed by the user are checked against the live, dynamically-fetched list of sectors actually present in the data (not a hardcoded list) — an invalid sector (e.g. "Aerospace") gets a clarifying response listing the real options, instead of a false zero.
+</details>
+
+<details>
+<summary><strong>Cross-board caution</strong></summary>
+
+Deals and Work Orders are **separate boards with no explicit linking field**. The agent never assumes a 1:1 correspondence between a deal and a work order — cross-board answers (e.g. "which sectors have deals but no work orders") are computed by comparing sector sets, not by inferring conversion rates that the data doesn't actually support.
+</details>
+
+---
+
+## Tech Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Backend | FastAPI | Async, fast to iterate on in a 6-hour window |
+| Data source | monday.com GraphQL API | Live data, per assignment requirement |
+| LLM (planning) | Groq — `[TODO: model name]` | Fast inference for query intent extraction |
+| LLM (narration) | Groq — `gpt-oss-120b` | Turns verified metrics into founder-readable prose |
+| Data processing | pandas | Cleaning + aggregation |
+| Hosting | `[TODO: e.g. Render / Railway / Fly.io]` | |
+
+---
 
 ## Project Structure
 
 ```
 monday-bi-agent/
-│
-├── app.py              # Streamlit chat frontend
-├── main.py             # FastAPI backend (POST /api/chat)
-├── Monday_client.py    # Monday.com GraphQL client
-├── cleaner.py           # Data cleaning / normalization
-├── bi_engine.py         # Deterministic BI calculations
-├── query_planner.py     # LLM-based intent/sector planning
+├── main.py            # FastAPI app, /api/chat route, conversation context
+├── Monday_client.py    # GraphQL client, cursor-paginated board fetch
+├── cleaner.py          # Data cleaning: dedup, normalization, type coercion
+├── bi_engine.py         # Verified metric computation (pipeline, execution, cross-board)
+├── query_planner.py     # Intent extraction + clarification detection (Groq)
 ├── requirements.txt
-├── .gitignore
-└── README.md
+└── .env.example
 ```
 
-## Monday.com Board Configuration
+---
 
-This agent reads column data by **title**, not by column type or ID — `Monday_client.py` maps every column's title straight into a DataFrame column name. That means your monday.com boards must use the **exact column titles** below for the app to calculate metrics correctly. Any extra columns you add are simply ignored (safe to include for your own tracking).
+## Known Limitations
 
-### Deals board — columns the agent depends on
+- **Conversation memory is in-process** (`conversation_contexts: Dict`) — resets on redeploy or restart; not shared across multiple server instances.
+- **No persistent caching** of board data — every query re-fetches live from monday.com, which is correct per the brief but adds latency on large boards.
+- **No auth layer** on the API itself — fine for a take-home demo, not production-ready.
+- **Deals ↔ Work Orders have no explicit link field** in the source data, so any "conversion rate" style question is answered at the sector level, not the individual-deal level.
 
-| Column title (exact) | Used for |
-|---|---|
-| `Sector/service` | Sector dimension — pipeline filtering & dynamic sector discovery |
-| `Deal Stage` | Stage distribution (e.g. "B. Sales Qualified Leads") |
-| `Deal Status` | Won/lost counts and status distribution — must contain the literal values `Won` / `Lost` (case-insensitive) for those metrics to be counted |
-| `Masked Deal value` | Total and per-sector recorded deal value |
-| `Close Date (A)`, `Tentative Close Date`, `Created Date` | Parsed as dates during cleaning |
+---
 
-### Work Order Tracker board — columns the agent depends on
+## Roadmap
 
-| Column title (exact) | Used for |
-|---|---|
-| `Sector` | Sector dimension — matched against the Deals board's `Sector/service` for cross-board analysis |
-| `Execution Status` | Execution status distribution |
-| `Amount in Rupees (Incl of GST) (Masked)` | Total contracted value |
-| `Billed Value in Rupees (Incl of GST.) (Masked)` | Total billed value, billing % |
-| `Collected Amount in Rupees (Incl of GST.) (Masked)` | Total collected value, collection %, outstanding value |
-| `Amount in Rupees (Excl of GST) (Masked)`, `Billed Value in Rupees (Excl of GST.) (Masked)`, `Amount to be billed in Rs. (Exl./Incl. of GST) (Masked)`, `Amount Receivable (Masked)` | Cleaned and available, not currently used in headline metrics |
-| `Data Delivery Date`, `Date of PO/LOI`, `Probable Start Date`, `Probable End Date`, `Last invoice date` | Parsed as dates during cleaning |
 
-### Getting your board IDs and API key
+- [ ] Persist conversation context (Redis or similar) instead of in-memory dict
+- [ ] Cache board fetches with a short TTL to reduce latency without sacrificing "live" freshness
+- [ ] Add automated regression tests for the verification checklist in the Decision Log
 
-1. Import the two source spreadsheets into monday.com as **two separate boards**, matching the column titles above.
-2. **Board ID**: open the board in monday.com and copy the numeric ID from the URL (`https://<you>.monday.com/boards/<BOARD_ID>`).
-3. **API key**: in monday.com go to your avatar → **Developers** → **My Access Tokens**, and generate a personal API token (v2 API, read access is sufficient — this agent never writes to your boards).
-4. Put the board IDs and token into `.env` as shown below (`DEALS_BOARD_ID`, `WORK_ORDERS_BOARD_ID`, `MONDAY_API_KEY`).
+---
 
-## Setup
+## License
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/codehacker4655/monday-bi-agent.git
-cd monday-bi-agent
-```
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure environment variables
-
-Create a `.env` file in the project root:
-
-```env
-DEALS_BOARD_ID=your_deals_board_id
-WORK_ORDERS_BOARD_ID=your_work_orders_board_id
-GROQ_API_KEY=your_groq_api_key
-MONDAY_API_KEY=your_monday_api_key
-```
-
-> **Never commit `.env` or expose API keys publicly.** `main.py` will refuse to start if `DEALS_BOARD_ID`, `WORK_ORDERS_BOARD_ID`, or `GROQ_API_KEY` are missing.
-
-### 4. Run the FastAPI backend
-
-```bash
-uvicorn main:app --reload
-```
-
-The chat endpoint used by the Streamlit UI is:
-
-```
-POST /api/chat
-Body: { "query": "<question>", "session_id": "<uuid>" }
-```
-
-### 5. Run the Streamlit frontend
-
-In a separate terminal:
-
-```bash
-streamlit run app.py
-```
-
-By default, the UI points at a deployed Render backend URL (editable in the sidebar). To use your local backend instead, set the **Backend Endpoint** field in the sidebar to:
-
-```
-http://localhost:8000/api/chat
-```
-
-## Design Principles
-
-1. **Verified metrics first** — business numbers come from the BI Engine, not the LLM.
-2. **LLM for understanding and explanation only** — used to parse questions, plan analysis, and explain verified results in natural language.
-3. **Dynamic data discovery** — sectors are discovered from live data rather than hard-coded.
-4. **Explicit data quality** — missing data is surfaced, never silently zeroed.
-5. **Lightweight conversation context** — a session stores the last sector/intent so follow-up questions work naturally.
-
-## Limitations
-
-- Depends on the availability of the Monday.com API.
-- Answer quality depends on the completeness of the source board data.
-- Conversation context is stored in-memory and is lost on backend restart.
-- The BI Engine currently supports a defined set of metrics and intents; more advanced analytical questions need additional calculations and planning logic.
-
-## Future Improvements
-
-- More business metrics and more advanced follow-up handling
-- Better query planning
-- Additional Monday.com boards
-- Persistent conversation memory
-- More detailed data-quality reporting
-- Authentication and access control
-- Automated testing
-- Improved visual analytics and dashboards
-
-## Summary
-
-Founder BI Agent connects live Monday.com business data with natural-language interaction, keeping a strict separation between:
-
-**Question Understanding → Data Processing → Verified BI Calculations → Natural-Language Explanation**
-
-This keeps business calculations deterministic and auditable while still offering a simple conversational experience for executives.
+`[TODO: add a license, or note "Submitted as an assignment deliverable — not for redistribution"]`
