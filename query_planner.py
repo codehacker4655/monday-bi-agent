@@ -91,6 +91,17 @@ SUPPORTED INTENTS:
    execution, especially by sector, or ask for patterns,
    gaps, opportunities, or risks across both datasets.
 
+   This intent is REQUIRED (not optional) for:
+   - Any ranking or superlative question, even about a single
+     metric — e.g. "which sector has the largest/highest/lowest/
+     most/least/smallest X", "top sector for Y", "worst-performing
+     sector for Z". These require comparing ALL sectors against
+     each other, which only cross_board_analysis computes.
+   - Any question asking which sector(s) have no work orders, or
+     which work-order sectors are missing from the pipeline (or
+     vice versa).
+   - Any explicit sector-vs-sector comparison.
+
 7. general
    Questions that do not clearly fit the above.
 
@@ -105,16 +116,33 @@ BOARD SELECTION:
 
 FOLLOW-UP RULES:
 
-- If the current question explicitly mentions a sector, use it.
-- If the current question uses phrases such as:
+- If the current question explicitly mentions a sector, use it and set
+  "is_follow_up" to false (it doesn't need to inherit anything).
+- Set "is_follow_up" to true ONLY when the current question contains an
+  explicit continuation cue tied to the previous turn, such as:
   "it", "that", "there", "same sector", "the same one",
-  "what about the money", "what about collections",
-  use the previous context when appropriate.
-- If there is no sector in the current question and no previous sector,
-  return null.
+  "what about the money", "what about collections".
+  In that case, and only in that case, the previous sector may carry
+  over.
+- A general, freestanding business question — even one that omits a
+  sector and even if a sector was discussed one or more turns earlier —
+  is NOT a follow-up by default. Examples: "what's our collection
+  percentage", "how much have we billed so far", "what's the execution
+  status of our work orders". These use "our" / "we" and ask about the
+  business as a whole. Set "is_follow_up" to false and "sector" to null
+  for these UNLESS an explicit continuation cue (see above) is present.
+- When in doubt between "this is a fresh company-wide question" and
+  "this is a follow-up to the last sector", prefer treating it as
+  company-wide (sector: null, is_follow_up: false). A founder asking
+  a general question expects a company-wide number unless they signal
+  otherwise.
+- If the user names a sector that is NOT in the provided sector lists,
+  do not substitute a different (e.g. previous) sector in its place.
+  Return that field as null and rely on "needs_clarification" /
+  "clarification_question" to ask the user to confirm the sector name,
+  or list the closest available sectors if one is obviously implied by
+  a typo or synonym.
 - Never invent a sector just to make the question fit.
-- A follow-up question should inherit relevant context from the previous
-  turn unless the user explicitly changes it.
 
 CLARIFICATION:
 
@@ -133,8 +161,8 @@ financial execution, collections, or overall business performance.
 Return ONLY valid JSON in exactly this structure:
 
 {{
-    "intent": ""intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | cross_board_analysis | general",",
-    "sector": "exact sector from the provided lists or null",
+    "intent": "pipeline_health | pipeline_value | financial_summary | collections | execution_status | cross_board_analysis | general",
+    "sector": "exact sector name from the provided lists, or null if none is named or implied",
     "boards": ["deal_funnel", "work_order_tracker"],
     "is_follow_up": true,
     "needs_clarification": false,
@@ -182,6 +210,15 @@ Return ONLY valid JSON in exactly this structure:
             plan["intent"] = "general"
 
         # -----------------------------
+        # Follow-up flag (normalized early so the sector-validation
+        # block below can rely on a real bool, not a raw LLM value)
+        # -----------------------------
+
+        plan["is_follow_up"] = bool(
+            plan.get("is_follow_up", False)
+        )
+
+        # -----------------------------
         # Validate sector
         # -----------------------------
 
@@ -189,19 +226,60 @@ Return ONLY valid JSON in exactly this structure:
             deal_sectors + work_order_sectors
         )
 
-        sector = plan.get("sector")
+        # Case-insensitive lookup so minor casing differences from the
+        # LLM ("mining" vs "Mining") don't get treated as unrecognized.
+        sectors_by_casefold = {
+            s.casefold(): s
+            for s in all_sectors
+        }
 
-        if sector not in all_sectors:
+        raw_sector = plan.get("sector")
+        sector_not_found = False
 
-            # If the model failed to identify a sector,
-            # inherit the previous one only when available.
+        if raw_sector:
+            matched_sector = sectors_by_casefold.get(
+                str(raw_sector).strip().casefold()
+            )
+
+            if matched_sector:
+                plan["sector"] = matched_sector
+            else:
+                # The model (or user) named a sector that does not
+                # exist in the live data. NEVER silently substitute
+                # a different sector (e.g. a stale one from previous
+                # context) here — that fabricates an answer for a
+                # sector the user didn't ask about.
+                plan["sector"] = None
+                sector_not_found = True
+        else:
+            plan["sector"] = None
+
+        # Only inherit the previous sector when this is a genuine
+        # follow-up AND the user didn't name an (unrecognized) sector
+        # of their own. A general/freestanding question with no
+        # sector mentioned should NOT silently inherit a sector from
+        # several turns ago.
+        if (
+            plan["sector"] is None
+            and not sector_not_found
+            and plan.get("is_follow_up")
+        ):
             previous_sector = previous_context.get("sector")
 
             if previous_sector in all_sectors:
                 plan["sector"] = previous_sector
 
-            else:
-                plan["sector"] = None
+        plan["sector_not_found"] = sector_not_found
+
+        if sector_not_found:
+            plan["needs_clarification"] = True
+            plan["clarification_question"] = (
+                f"I couldn't find a sector called "
+                f"'{raw_sector}' in the live data. "
+                f"Available sectors are: "
+                f"{', '.join(sorted(all_sectors, key=str.casefold))}. "
+                "Could you confirm which sector you meant?"
+            )
 
         # -----------------------------
         # Validate boards
@@ -256,14 +334,6 @@ Return ONLY valid JSON in exactly this structure:
                 "deal_funnel",
                 "work_order_tracker"
             ]
-
-        # -----------------------------
-        # Follow-up flag
-        # -----------------------------
-
-        plan["is_follow_up"] = bool(
-            plan.get("is_follow_up", False)
-        )
 
         # -----------------------------
         # Clarification flag

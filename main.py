@@ -233,8 +233,21 @@ async def process_bi_query(request: QueryRequest):
         # --------------------------------------------------
         # 8. Save context for follow-up questions
         # --------------------------------------------------
+        # cross_board_analysis is dataset-wide by definition — it
+        # doesn't answer about one sector, so never let a sector
+        # (stale or otherwise) persist into context from this turn.
+        # Without this, a leftover sector attached to a cross-board
+        # plan (even if unused by the BI call itself) could silently
+        # leak into a later, unrelated question via follow-up
+        # inheritance.
+        context_sector = (
+            None
+            if intent == "cross_board_analysis"
+            else sector_target
+        )
+
         conversation_contexts[request.session_id] = {
-            "sector": sector_target,
+            "sector": context_sector,
             "intent": intent,
             "boards": plan.get("boards", [])
         }
@@ -307,33 +320,33 @@ IMPORTANT RULES:
     clearly state that the sector is not represented in the
     other dataset instead of treating it as zero.
 
-14. When describing a metric as high, low, strong, weak, largest, smallest,
+15. When describing a metric as high, low, strong, weak, largest, smallest,
     best, or worst, verify that statement against the actual verified
     metrics. Never contradict the numbers.
 
-15. Do not group sectors together unless they genuinely share the relevant
+16. Do not group sectors together unless they genuinely share the relevant
     characteristic shown by the verified metrics.
 
-16. Do not describe a sector as having "high conversion" or "strong
+17. Do not describe a sector as having "high conversion" or "strong
     conversion" unless an explicit conversion metric is provided.
 
-17. For cross-board analysis, compare sectors using the actual metrics
+18. For cross-board analysis, compare sectors using the actual metrics
     provided. Do not infer deal-to-work-order conversion from sector-level
     counts.
 
-18. Before making an insight, check that every factual part of the insight
+19. Before making an insight, check that every factual part of the insight
     is supported by the verified data.
 
-19. If the data supports only a partial conclusion, state the narrower
+20. If the data supports only a partial conclusion, state the narrower
     conclusion rather than extending it.
 
-20. For rankings or comparisons, use the actual values. Do not rely on
+21. For rankings or comparisons, use the actual values. Do not rely on
     vague impressions from the table.
 
-21. Never repeat a statement that conflicts with a number shown in the
+22. Never repeat a statement that conflicts with a number shown in the
     verified metrics.
 
-22. Separate your reasoning into three levels when useful:
+23. Separate your reasoning into three levels when useful:
 
     FACT:
     State only what the verified metrics directly show.
@@ -345,19 +358,19 @@ IMPORTANT RULES:
     Suggest what leadership may want to investigate or prioritize.
     Do not present the recommendation as a guaranteed outcome.
 
-23. Every insight must be traceable to one or more values
+24. Every insight must be traceable to one or more values
     in the verified metrics.
 
-24. Do not manufacture trends, correlations, causation,
+25. Do not manufacture trends, correlations, causation,
     conversion rates, or business relationships that are
     not explicitly represented in the verified data.
 
-25. When the question asks "why", distinguish between:
+26. When the question asks "why", distinguish between:
     - what the data proves
     - what the data may indicate
     - what requires further investigation.
 
-26. When the available data is insufficient to answer the
+27. When the available data is insufficient to answer the
     question confidently, explicitly say that the available
     data is insufficient rather than guessing.
     

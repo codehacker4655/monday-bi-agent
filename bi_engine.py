@@ -229,15 +229,23 @@ class BIEngine:
                 .str.casefold()
             )
 
+            # Contains-based matching (not exact equality) so labels
+            # like "Won ", "Deal Won", or a stray trailing character
+            # from the source system still get counted correctly.
+            # This is deliberately still deterministic/keyword-based,
+            # not fuzzy — it only matches the literal substrings below.
+            won_pattern = "|".join(self.WON_STATUS_VALUES)
+            lost_pattern = "|".join(self.LOST_STATUS_VALUES)
+
             won_deals = int(
-                status.isin(
-                    self.WON_STATUS_VALUES
+                status.str.contains(
+                    won_pattern, regex=True, na=False
                 ).sum()
             )
 
             lost_deals = int(
-                status.isin(
-                    self.LOST_STATUS_VALUES
+                status.str.contains(
+                    lost_pattern, regex=True, na=False
                 ).sum()
             )
 
