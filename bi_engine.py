@@ -322,6 +322,8 @@ class BIEngine:
             if column not in df.columns:
                 return 0.0
 
+            values=df[column].astype('string')
+
             numeric_values = pd.to_numeric(
                 df[column],
                 errors="coerce"
@@ -366,7 +368,7 @@ class BIEngine:
         missing_contract = (
             int(
                 pd.to_numeric(
-                    df[contract_col],
+                    df[contract_col].astype('string'),
                     errors="coerce"
                 ).isna().sum()
             )
@@ -377,7 +379,7 @@ class BIEngine:
         missing_billed = (
             int(
                 pd.to_numeric(
-                    df[billed_col],
+                    df[billed_col].astype('string'),
                     errors="coerce"
                 ).isna().sum()
             )
@@ -388,7 +390,7 @@ class BIEngine:
         missing_collected = (
             int(
                 pd.to_numeric(
-                    df[collected_col],
+                    df[collected_col].astype('string'),
                     errors="coerce"
                 ).isna().sum()
             )
